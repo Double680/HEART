@@ -21,7 +21,7 @@ async def main(args):
         data = json.loads(file.read())
 
     llm_config = {
-        "model": args.model,
+        "model": 'gpt-4o-mini-2024-07-18',
         "api_key": "sk-HDB7FhzGBbbDKUEKyx5NWzKjTpBfmR1FNzK2v4rrPXfSaxCT",
         "base_url": "https://api2.aigcbest.top/v1",
     }
@@ -32,6 +32,9 @@ async def main(args):
         agent = CoTAgent(llm_config)
     elif args.agent == 'selfcst':
         agent = SelfConsistencyAgent(llm_config)
+    elif args.agent == 'o3-mini':
+        llm_config['model'] = 'o3-mini-high'
+        agent = E2EAgent(llm_config)
 
     samples = []
     for id in tqdm(range(len(data))):
@@ -65,10 +68,6 @@ async def main(args):
     if not os.path.exists(result_path_root):
         os.mkdir(result_path_root)
 
-    result_path_root = os.path.join(result_path_root, args.model)
-    if not os.path.exists(result_path_root):
-        os.mkdir(result_path_root)
-
     if args.dev:
         result_path_root = os.path.join(result_path_root, 'dev')
     else:
@@ -90,24 +89,23 @@ async def main(args):
                 results.append({'uid': uid, 'predicted_ans': pred, 'predicted_program': []})
     else:
         preds = []
-        batch = 100
+        batch = args.batch
         for i in range(start, end, batch):
             preds += await process_queries(samples[i:min(i+batch, end)], agent)
-
-        for i in range(start, end):
-            uid = samples[i]['uid']
-            pred = preds[i-start]
-            
-            with open(os.path.join(result_path_root, f'{i}.txt'), 'w') as file:
-                file.write(f"UID:\n{uid}\n")
-                file.write(f"Prediction:\n{pred}\n")
-                pred = pred.split('Answer: ')[-1]
-                if args.dev:
-                    gold = samples[i]['answer']
-                    file.write(f"Gold:\n{gold}")
-                    results.append({'uid': uid, 'pred': pred, 'gold': gold})            
-                else:
-                    results.append({'uid': uid, 'predicted_ans': pred, 'predicted_program': []})
+            for j in range(i, min(i+batch, end)):
+                uid = samples[j]['uid']
+                pred = preds[j-start]
+                
+                with open(os.path.join(result_path_root, f'{j}.txt'), 'w') as file:
+                    file.write(f"UID:\n{uid}\n")
+                    file.write(f"Prediction:\n{pred}\n")
+                    pred = pred.split('Answer: ')[-1]
+                    if args.dev:
+                        gold = samples[j]['answer']
+                        file.write(f"Gold:\n{gold}")
+                        results.append({'uid': uid, 'pred': pred, 'gold': gold})            
+                    else:
+                        results.append({'uid': uid, 'predicted_ans': pred, 'predicted_program': []})
 
     if args.dev:
         exact, f1 = 0.0, 0.0
@@ -126,10 +124,10 @@ async def main(args):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dev', action='store_true')
-parser.add_argument('--model', default='gpt-4o-mini-2024-07-18')
 parser.add_argument('--agent', default='e2e')
 parser.add_argument('--start', default=0, type=int)
 parser.add_argument('--end', default=-1, type=int)
+parser.add_argument('--batch', default=100, type=int)
 parser.add_argument('--debug', action='store_true')
 parser.add_argument('--eval', action='store_true')
 args = parser.parse_args()

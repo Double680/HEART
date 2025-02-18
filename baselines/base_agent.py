@@ -28,7 +28,10 @@ class E2EAgent:
 
     def generate_query(self, sample):
         query_message = self.generate_examples()
-        query_message += "Please answer the question according to the passage content. \n"
+        if self.model != "o3-mini-high":
+            query_message += "Please answer the question according to the passage content. \n"
+        else: 
+            query_message += "Please generate the answer to the question according to the passage content. Do not generate other texts, such as the intermediate thinking. \n"
         query_message += self._get_template_message(sample['document'], sample['question'])
         return query_message
 
@@ -36,7 +39,7 @@ class E2EAgent:
         query_message = self.generate_query(sample)
         while True:
             try:
-                if self.model not in ["o3-mini-high"]:
+                if self.model != "o3-mini-high":
                     completion = await self.aclient.chat.completions.create(
                         model=self.model,
                         temperature=0.1,
@@ -46,8 +49,7 @@ class E2EAgent:
                 else:
                     completion = await self.aclient.chat.completions.create(
                         model=self.model,
-                        max_tokens=100,
-                        messages=[{'role': 'system', 'content': self.system_message}, {'role': 'user', 'content': query_message}]
+                        messages=[{'role': 'user', 'content': query_message}]
                     )
                 response = completion.choices[0].message.content
                 break
