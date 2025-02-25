@@ -54,7 +54,7 @@ def init():
     elif args.agent == 'selfcst':
         agent = SelfConsistencyAgent(llm_config, result_path_root)
     elif args.agent == 'o3-mini':
-        llm_config['model'] = 'o3-mini-high'
+        llm_config['llm_model'] = 'o3-mini-high'
         agent = E2EAgent(llm_config, result_path_root)
     
     return args, samples, agent
