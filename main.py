@@ -5,6 +5,7 @@ from baselines.base_agent import *
 from baselines.retriever import *
 from utils.evaluate import *
 from utils.embedding import *
+from utils.util import *
 from dotenv import load_dotenv
 from tqdm.asyncio import tqdm_asyncio
 import asyncio
@@ -33,16 +34,14 @@ def init():
     if args.end == -1:
         args.end = len(samples)
 
-    result_path_root = f'./results/{args.agent}'
-    if not os.path.exists(result_path_root):
-        os.mkdir(result_path_root)
-
+    result_path_dir = f'./results'
+    result_path_agent = os.path.join(result_path_dir, args.agent)
     if args.dev:
-        result_path_root = os.path.join(result_path_root, 'dev')
+        result_path_root = os.path.join(result_path_agent, 'dev')
     else:
-        result_path_root = os.path.join(result_path_root, 'test')
-    if not os.path.exists(result_path_root):
-        os.mkdir(result_path_root)
+        result_path_root = os.path.join(result_path_agent, 'test')
+
+    ensure_dirs(result_path_dir, result_path_agent, result_path_root)
     args.result_path_root = result_path_root
 
     # load models
@@ -64,10 +63,10 @@ def init():
         llm_config['llm_model'] = 'o3-mini-high'
         agent = E2EAgent(llm_config, result_path_root)
     
-    if args.retriever == "dpr":
-        retriever = DensePassageRetriever(llm_config)
+    # if args.retriever == "dpr":
+    #     retriever = DensePassageRetriever(llm_config)
 
-    return args, samples, llm_config, agent, retriever
+    return args, samples, llm_config, agent
 
 
 async def process_queries(queries, agent):

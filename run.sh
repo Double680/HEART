@@ -1,0 +1,1 @@
+python main.py --dev --end 10 --retriever dpr

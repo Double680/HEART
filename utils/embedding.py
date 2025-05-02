@@ -4,13 +4,8 @@ import asyncio
 import torch
 from tqdm import tqdm
 from utils.api_query import emb_query
+from utils.util import *
 from openai import AsyncOpenAI
-
-
-def ensure_dirs(*dirs):
-    for dir in dirs:
-        if not os.path.exists(dir):
-            os.mkdir(dir)
 
 
 async def get_emb(args, emb_client, emb_model, inputs):
@@ -36,13 +31,15 @@ async def prepare_emb(args, samples, config, stored_emb_dir):
     emb_model = config["emb_model"]
 
     # check whether sample embeddings exist
-    for i in tqdm(range(10)):
+    print("Prepare embeddings")
+    for i in tqdm(range(len(samples[args.start:args.end]))):
         sample = samples[i]
         uid = sample["uid"]
         text_st, table_st, question = sample['paragraphs'], sample['table_description'], sample['qa']['question']
-        emb_path = os.path.join(stored_emb_subdir, f'{uid}_emb.pth')
+        emb_path = os.path.join(stored_emb_subdir, f'{uid}.json')
         try:
-            sample_emb_dict = torch.load(emb_path)
+            with open(emb_path, 'r') as file:
+                sample_emb_dict = json.loads(file.read())
             assert sample_emb_dict["text_st_embs"].size(0) == len(text_st)
             assert sample_emb_dict["table_st_embs"].size(0) == len(table_st)
             assert sample_emb_dict["question_emb"].size(0) == 1
@@ -56,4 +53,5 @@ async def prepare_emb(args, samples, config, stored_emb_dir):
                 "table_st_embs": table_st_embs,
                 "question_emb": question_emb
             }
-            torch.save(sample_emb_dict, emb_path)
+            with open(emb_path, 'w') as file:
+                file.write(json.dumps(sample_emb_dict))
