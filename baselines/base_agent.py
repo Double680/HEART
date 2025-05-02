@@ -40,7 +40,6 @@ class BaseAgent:
             api_key=config['api_key']
         )
         self.llm_model = config['llm_model']
-        self.emb_model = config['emb_model']
         self.result_path = result_path
 
         self.cot = cot
@@ -101,7 +100,7 @@ class BaseAgent:
 
 class E2EAgent(BaseAgent):
     def __init__(self, config, result_path):
-        super().__init__(self, config, result_path)
+        super().__init__(config, result_path)
         
     async def query(self, sample):
         uid, messages, path = self._preprocess_query(sample)
@@ -121,7 +120,7 @@ class E2EAgent(BaseAgent):
 
 class CoTAgent(BaseAgent):
     def __init__(self, config, result_path):
-        super().__init__(self, config, result_path)
+        super().__init__(config, result_path)
 
     async def query(self, sample):
         uid, messages, path = self._preprocess_query(sample)
@@ -141,7 +140,7 @@ class CoTAgent(BaseAgent):
 
 class SelfConsistencyAgent(BaseAgent):
     def __init__(self, config, result_path):
-        super().__init__(self, config, result_path, cot=True)
+        super().__init__(config, result_path, cot=True)
 
     async def query(self, sample):
         uid, messages, path = self._preprocess_query(sample)

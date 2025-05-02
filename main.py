@@ -2,7 +2,9 @@ import os
 import json
 import argparse
 from baselines.base_agent import *
+from baselines.retriever import *
 from utils.evaluate import *
+from utils.embedding import *
 from dotenv import load_dotenv
 from tqdm.asyncio import tqdm_asyncio
 import asyncio
@@ -12,20 +14,24 @@ def init():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dev', action='store_true')
     parser.add_argument('--agent', default='e2e')
+    parser.add_argument('--retriever', default='none')
     parser.add_argument('--start', default=0, type=int)
     parser.add_argument('--end', default=-1, type=int)
     parser.add_argument('--batch', default=100, type=int)
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
+    # load data
     if args.dev:
-        input_path = 'datasets/multihiertt/dev.json'
+        input_path = './datasets/multihiertt/dev.json'
     else:
-        input_path = 'datasets/multihiertt/test.json'
+        input_path = './datasets/multihiertt/test.json'
     with open(input_path, 'r') as file:
         samples = json.loads(file.read())
         for i in range(len(samples)):
             samples[i]['id'] = i
+    if args.end == -1:
+        args.end = len(samples)
 
     result_path_root = f'./results/{args.agent}'
     if not os.path.exists(result_path_root):
@@ -39,6 +45,7 @@ def init():
         os.mkdir(result_path_root)
     args.result_path_root = result_path_root
 
+    # load models
     load_dotenv()
     llm_config = {
         "llm_model": os.getenv('LLM_MODEL'),
@@ -57,7 +64,10 @@ def init():
         llm_config['llm_model'] = 'o3-mini-high'
         agent = E2EAgent(llm_config, result_path_root)
     
-    return args, samples, agent
+    if args.retriever == "dpr":
+        retriever = DensePassageRetriever(llm_config)
+
+    return args, samples, llm_config, agent, retriever
 
 
 async def process_queries(queries, agent):
@@ -65,14 +75,19 @@ async def process_queries(queries, agent):
 
 
 async def main():
-    args, samples, agent = init()
+    args, samples, llm_config, agent = init()
     
+    # load embeddings
+    stored_emb_dir = './embeddings'
+    if args.retriever != 'none':
+        await prepare_emb(args, samples, llm_config, stored_emb_dir)
+
     if args.debug:
         print(agent.generate_query(samples[0]))
         return
 
     start = args.start
-    end = len(samples) if args.end == -1 else args.end
+    end = args.end
     batch = args.batch
     results = []
 
@@ -95,6 +110,7 @@ async def main():
             with open(os.path.join(args.result_path_root, f'{j}.json'), 'w') as file:
                 file.write(json.dumps(result, indent=2))
 
+    # evaluate
     if args.dev:
         exact, f1 = 0.0, 0.0
         for i in range(end-start):

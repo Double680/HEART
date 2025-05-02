@@ -1,5 +1,6 @@
 from openai import AsyncOpenAI
 
+
 async def llm_query(aclient: AsyncOpenAI, model, messages, temperature=0.1, max_tokens=1000, n=1):
     completion = await aclient.chat.completions.create(
         model=model,
@@ -9,3 +10,11 @@ async def llm_query(aclient: AsyncOpenAI, model, messages, temperature=0.1, max_
         n=n
     )
     return completion
+
+
+async def emb_query(aclient: AsyncOpenAI, model, inputs):
+    embeddings = await aclient.embeddings.create(
+        model=model,
+        input=inputs 
+    )
+    return embeddings
