@@ -74,7 +74,7 @@ class BaseAgent:
     
     def generate_query_message(self, sample):
         if self.retriever != None:
-            sample["paragraphs"] = self.retriever.retrieve(sample)
+            sample["paragraphs"], sample["tables"] = self.retriever.retrieve(sample)
 
         processed_sample = process_raw_sample(sample)
         query_message = self.generate_examples()

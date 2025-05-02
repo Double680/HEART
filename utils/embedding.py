@@ -19,13 +19,9 @@ async def get_emb(args, emb_client, emb_model, inputs):
     return emb
 
 
-async def prepare_emb(args, samples, config, stored_emb_dir):
-    if args.dev:
-        data_type = "dev"
-    else:
-        data_type = "test"
-    stored_emb_subdir = os.path.join(stored_emb_dir, data_type)
-    ensure_dirs(stored_emb_dir, stored_emb_subdir)    
+async def prepare_emb(args, samples, config):
+    stored_emb_dir = args.stored_emb_dir
+    ensure_dirs(stored_emb_dir)    
     
     start, end = args.start, args.end
     emb_client = AsyncOpenAI(base_url=config["base_url"], api_key=config["api_key"])
@@ -37,7 +33,7 @@ async def prepare_emb(args, samples, config, stored_emb_dir):
         sample = samples[i]
         uid = sample["uid"]
         text_st, table_st, question = sample['paragraphs'], sample['table_description'], sample['qa']['question']
-        emb_path = os.path.join(stored_emb_subdir, f'{uid}.json')
+        emb_path = os.path.join(stored_emb_dir, f'{uid}.json')
         try:
             assert os.path.exists(emb_path)
             # with open(emb_path, 'r') as file:

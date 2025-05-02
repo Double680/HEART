@@ -55,8 +55,17 @@ def init():
     }
 
     retriever = None
-    if args.retriever == "dpr":
-        retriever = DensePassageRetriever(args.result_path_root, gpu=args.gpu)
+    if args.retriever != "none":
+        stored_emb_dir_root = './embeddings'
+        if args.dev:
+            data_type = "dev"
+        else:
+            data_type = "test"
+        stored_emb_dir = os.path.join(stored_emb_dir_root, data_type)
+        args.stored_emb_dir = stored_emb_dir
+
+        if args.retriever == "dpr":
+            retriever = DensePassageRetriever(args.stored_emb_dir, gpu=args.gpu)
 
     if args.agent == 'e2e':
         agent = E2EAgent(llm_config, result_path_root, retriever)
@@ -79,9 +88,8 @@ async def main():
     args, samples, llm_config, agent = init()
     
     # load embeddings
-    stored_emb_dir = './embeddings'
     if args.retriever != 'none':
-        await prepare_emb(args, samples, llm_config, stored_emb_dir)
+        await prepare_emb(args, samples, llm_config)
 
     if args.debug:
         print(agent.generate_query(samples[0]))
