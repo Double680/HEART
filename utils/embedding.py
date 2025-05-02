@@ -27,22 +27,24 @@ async def prepare_emb(args, samples, config, stored_emb_dir):
     stored_emb_subdir = os.path.join(stored_emb_dir, data_type)
     ensure_dirs(stored_emb_dir, stored_emb_subdir)    
     
+    start, end = args.start, args.end
     emb_client = AsyncOpenAI(base_url=config["base_url"], api_key=config["api_key"])
     emb_model = config["emb_model"]
 
     # check whether sample embeddings exist
     print("Prepare embeddings")
-    for i in tqdm(range(len(samples[args.start:args.end]))):
+    for i in tqdm(range(len(samples[start:end]))):
         sample = samples[i]
         uid = sample["uid"]
         text_st, table_st, question = sample['paragraphs'], sample['table_description'], sample['qa']['question']
         emb_path = os.path.join(stored_emb_subdir, f'{uid}.json')
         try:
-            with open(emb_path, 'r') as file:
-                sample_emb_dict = json.loads(file.read())
-            assert sample_emb_dict["text_st_embs"].size(0) == len(text_st)
-            assert sample_emb_dict["table_st_embs"].size(0) == len(table_st)
-            assert sample_emb_dict["question_emb"].size(0) == 1
+            assert os.path.exists(emb_path)
+            # with open(emb_path, 'r') as file:
+            #     sample_emb_dict = json.loads(file.read())
+            # assert sample_emb_dict["text_st_embs"].size(0) == len(text_st)
+            # assert sample_emb_dict["table_st_embs"].size(0) == len(table_st)
+            # assert sample_emb_dict["question_emb"].size(0) == 1
         except Exception:
             text_st_embs = await get_emb(args, emb_client, emb_model, text_st)
             table_stv = [table_st[key] for key in table_st]

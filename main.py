@@ -20,6 +20,7 @@ def init():
     parser.add_argument('--end', default=-1, type=int)
     parser.add_argument('--batch', default=100, type=int)
     parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--gpu', default=0, type=int)
     args = parser.parse_args()
 
     # load data
@@ -53,18 +54,19 @@ def init():
         "base_url": os.getenv('BASE_URL'),
     }
 
+    retriever = None
+    if args.retriever == "dpr":
+        retriever = DensePassageRetriever(args.result_path_root, gpu=args.gpu)
+
     if args.agent == 'e2e':
-        agent = E2EAgent(llm_config, result_path_root)
+        agent = E2EAgent(llm_config, result_path_root, retriever)
     elif args.agent == 'cot':
-        agent = CoTAgent(llm_config, result_path_root)
+        agent = CoTAgent(llm_config, result_path_root, retriever)
     elif args.agent == 'selfcst':
-        agent = SelfConsistencyAgent(llm_config, result_path_root)
+        agent = SelfConsistencyAgent(llm_config, result_path_root, retriever)
     elif args.agent == 'o3-mini':
         llm_config['llm_model'] = 'o3-mini-high'
-        agent = E2EAgent(llm_config, result_path_root)
-    
-    # if args.retriever == "dpr":
-    #     retriever = DensePassageRetriever(llm_config)
+        agent = E2EAgent(llm_config, result_path_root, retriever)
 
     return args, samples, llm_config, agent
 

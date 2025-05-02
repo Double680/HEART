@@ -34,13 +34,14 @@ def process_raw_sample(sample):
 
 
 class BaseAgent:
-    def __init__(self, config, result_path, cot=False):
+    def __init__(self, config, result_path, retriever, cot=False):
         self.aclient = AsyncOpenAI(
             base_url=config['base_url'],
             api_key=config['api_key']
         )
         self.llm_model = config['llm_model']
         self.result_path = result_path
+        self.retriever = retriever
 
         self.cot = cot
         if self.cot:
@@ -72,6 +73,9 @@ class BaseAgent:
         return examples
     
     def generate_query_message(self, sample):
+        if self.retriever != None:
+            sample["paragraphs"] = self.retriever.retrieve(sample)
+
         processed_sample = process_raw_sample(sample)
         query_message = self.generate_examples()
 
@@ -99,8 +103,8 @@ class BaseAgent:
 
 
 class E2EAgent(BaseAgent):
-    def __init__(self, config, result_path):
-        super().__init__(config, result_path)
+    def __init__(self, config, result_path, retriever):
+        super().__init__(config, result_path, retriever)
         
     async def query(self, sample):
         uid, messages, path = self._preprocess_query(sample)
@@ -119,8 +123,8 @@ class E2EAgent(BaseAgent):
     
 
 class CoTAgent(BaseAgent):
-    def __init__(self, config, result_path):
-        super().__init__(config, result_path)
+    def __init__(self, config, result_path, retriever):
+        super().__init__(config, result_path, retriever, cot=True)
 
     async def query(self, sample):
         uid, messages, path = self._preprocess_query(sample)
@@ -139,8 +143,8 @@ class CoTAgent(BaseAgent):
         
 
 class SelfConsistencyAgent(BaseAgent):
-    def __init__(self, config, result_path):
-        super().__init__(config, result_path, cot=True)
+    def __init__(self, config, result_path, retriever):
+        super().__init__(config, result_path, retriever, cot=True)
 
     async def query(self, sample):
         uid, messages, path = self._preprocess_query(sample)
