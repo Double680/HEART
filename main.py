@@ -102,6 +102,7 @@ async def main():
 
     for i in range(start, end, batch):
         left, right = i, min(i+batch, end)
+        print(f"Run sample {left}-{right-1}")
         await process_queries(samples[left:right], agent)
 
         for j in range(left, right):

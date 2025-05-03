@@ -5,7 +5,7 @@ import torch.nn as nn
 from openai import AsyncOpenAI
 
 class DensePassageRetriever:
-    def __init__(self, path_root, top_p=0.6, gpu=0):
+    def __init__(self, path_root, top_p=0.5, gpu=0):
         self.path_root = path_root
         self.top_p = top_p
         self.device = f"cuda:{gpu}" if gpu != -1 else "cpu"
