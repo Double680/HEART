@@ -7,10 +7,12 @@ import json
 import os
 
 
-def save_prediction(uid, pred, path):
+def save_prediction(uid, pred, path, text_inds, table_inds):
     result = {
         'uid': uid,
-        'prediction': pred
+        'prediction': pred, 
+        'retrieved_text_ids': text_inds,
+        'retrieved_table_ids': table_inds
     }
     with open(path, 'w') as file:
         file.write(json.dumps(result, indent=2))
@@ -73,8 +75,9 @@ class BaseAgent:
         return examples
     
     def generate_query_message(self, sample):
+        text_inds, table_inds = None, None
         if self.retriever != None:
-            sample["paragraphs"], sample["tables"] = self.retriever.retrieve(sample)
+            sample["paragraphs"], sample["tables"], text_inds, table_inds = self.retriever.retrieve(sample)
 
         processed_sample = process_raw_sample(sample)
         query_message = self.generate_examples()
@@ -87,19 +90,19 @@ class BaseAgent:
             else: 
                 query_message += "Please generate the answer to the question according to the passage content. Do not generate other texts, such as the intermediate thinking. \n"
         query_message += self._get_template_message(processed_sample['document'], processed_sample['question'])
-        return query_message
+        return query_message, text_inds, table_inds
 
     def _preprocess_query(self, sample):
         id, uid = sample['id'], sample['uid']
         path = os.path.join(self.result_path, f'{id}.json')
-        query_message = self.generate_query_message(sample)
+        query_message, text_inds, table_inds = self.generate_query_message(sample)
         messages=[
             {'role': 'system', 'content': self.system_message}, 
             {'role': 'user', 'content': query_message}
         ]
-        if self.llm_model == "o3-mini-high":
+        if self.llm_model in ["o3-mini-high", "deepseek-ai/DeepSeek-R1"]:
             messages = messages[1:]
-        return uid, messages, path
+        return uid, messages, path, text_inds, table_inds
 
 
 class E2EAgent(BaseAgent):
@@ -107,19 +110,22 @@ class E2EAgent(BaseAgent):
         super().__init__(config, result_path, retriever)
         
     async def query(self, sample):
-        uid, messages, path = self._preprocess_query(sample)
+        uid, messages, path, text_inds, table_inds = self._preprocess_query(sample)
         if os.path.exists(path):
             return
         while True:
             try:
-                completion = await llm_query(self.aclient, self.llm_model, messages, max_tokens=100)
+                if self.llm_model in ["o3-mini-high", "deepseek-ai/DeepSeek-R1"]:
+                    completion = await llm_query(self.aclient, self.llm_model, messages, max_tokens=5000)
+                else:
+                    completion = await llm_query(self.aclient, self.llm_model, messages, max_tokens=100)
                 response = completion.choices[0].message.content
                 break
             except Exception:
                 print('API Calling failed, retry in 5 seconds...')
                 time.sleep(5)
         
-        save_prediction(uid, response, path)
+        save_prediction(uid, response, path, text_inds, table_inds)
     
 
 class CoTAgent(BaseAgent):
@@ -127,7 +133,7 @@ class CoTAgent(BaseAgent):
         super().__init__(config, result_path, retriever, cot=True)
 
     async def query(self, sample):
-        uid, messages, path = self._preprocess_query(sample)
+        uid, messages, path, text_inds, table_inds = self._preprocess_query(sample)
         if os.path.exists(path):
             return
         while True:
@@ -139,7 +145,7 @@ class CoTAgent(BaseAgent):
                 print('API Calling failed, retry in 5 seconds...')
                 time.sleep(5)
         
-        save_prediction(uid, response, path)
+        save_prediction(uid, response, path, text_inds, table_inds)
         
 
 class SelfConsistencyAgent(BaseAgent):
@@ -147,7 +153,7 @@ class SelfConsistencyAgent(BaseAgent):
         super().__init__(config, result_path, retriever, cot=True)
 
     async def query(self, sample):
-        uid, messages, path = self._preprocess_query(sample)
+        uid, messages, path, text_inds, table_inds = self._preprocess_query(sample)
         if os.path.exists(path):
             return
         while True:
@@ -161,4 +167,4 @@ class SelfConsistencyAgent(BaseAgent):
                 print('API Calling failed, retry in 5 seconds...')
                 time.sleep(5)
 
-        save_prediction(uid, response, path)
+        save_prediction(uid, response, path, text_inds, table_inds)
