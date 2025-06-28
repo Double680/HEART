@@ -42,6 +42,7 @@ class BaseAgent:
             api_key=config['api_key']
         )
         self.llm_model = config['llm_model']
+        self.think_mode = config['think_mode']
         self.result_path = result_path
         self.retriever = retriever
 
@@ -85,7 +86,7 @@ class BaseAgent:
         if self.cot:
             query_message += "Please answer the question according to the passage content. Remember to end up with 'Answer: <ANSWER>'\n"
         else:
-            if self.llm_model not in ["o3-mini-high", "Qwen/Qwen3-32B"]:
+            if self.think_mode:
                 query_message += "Please answer the question according to the passage content. \n"
             else: 
                 query_message += "Please generate the answer to the question according to the passage content. Do not generate other texts, such as the intermediate thinking. \n"
@@ -100,7 +101,7 @@ class BaseAgent:
             {'role': 'system', 'content': self.system_message}, 
             {'role': 'user', 'content': query_message}
         ]
-        if self.llm_model in ["o3-mini-high", "Qwen/Qwen3-32B"]:
+        if self.think_mode:
             messages = messages[1:]
         return uid, messages, path, text_inds, table_inds
 
@@ -115,7 +116,7 @@ class E2EAgent(BaseAgent):
             return
         while True:
             try:
-                if self.llm_model in ["o3-mini-high", "Qwen/Qwen3-32B"]:
+                if self.think_mode:
                     completion = await llm_query(self.aclient, self.llm_model, messages, max_tokens=5000)
                 else:
                     completion = await llm_query(self.aclient, self.llm_model, messages, max_tokens=100)

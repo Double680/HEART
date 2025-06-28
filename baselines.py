@@ -22,6 +22,7 @@ def init():
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--gpu', default=0, type=int)
     parser.add_argument('--eval', action='store_true')
+    parser.add_argument('--think', action='store_true')
     args = parser.parse_args()
 
     # load data
@@ -43,6 +44,7 @@ def init():
         "emb_model": os.getenv('EMB_MODEL'),
         "api_key": os.getenv('API_KEY'),
         "base_url": os.getenv('BASE_URL'),
+        "think_mode": args.think
     }
 
     result_path_dir = f'./results'
