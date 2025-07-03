@@ -4,7 +4,7 @@ import argparse
 from baselines.base_agent import *
 from baselines.retriever import *
 from utils.evaluate import *
-from utils.embedding import *
+# from utils.embedding import *
 from utils.util import *
 from dotenv import load_dotenv
 from tqdm.asyncio import tqdm_asyncio
@@ -15,6 +15,7 @@ def init():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dev', action='store_true')
     parser.add_argument('--agent', default='e2e')
+    parser.add_argument('--aug', default='none', choices=['none', 'raw_aug', 'grpo_aug'], type=str)
     parser.add_argument('--retriever', default='none')
     parser.add_argument('--start', default=0, type=int)
     parser.add_argument('--end', default=-1, type=int)
@@ -41,7 +42,6 @@ def init():
     load_dotenv()
     llm_config = {
         "llm_model": os.getenv('LLM_MODEL'),
-        "emb_model": os.getenv('EMB_MODEL'),
         "api_key": os.getenv('API_KEY'),
         "base_url": os.getenv('BASE_URL'),
         "think_mode": args.think
@@ -49,7 +49,7 @@ def init():
 
     result_path_dir = f'./results'
     result_path_model = os.path.join(result_path_dir, llm_config["llm_model"].split('/')[-1])
-    result_path_agent = os.path.join(result_path_model, f'{args.agent}-{args.retriever}')
+    result_path_agent = os.path.join(result_path_model, f'{args.agent}-{args.retriever}-{args.aug}')
     if args.dev:
         result_path_root = os.path.join(result_path_agent, 'dev')
     else:
@@ -60,16 +60,11 @@ def init():
 
     retriever = None
     if args.retriever != "none":
-        stored_emb_dir_root = './embeddings'
-        if args.dev:
-            data_type = "dev"
-        else:
-            data_type = "test"
-        stored_emb_dir = os.path.join(stored_emb_dir_root, data_type)
+        stored_emb_dir = './stored'
         args.stored_emb_dir = stored_emb_dir
 
         if args.retriever == "dpr":
-            retriever = DensePassageRetriever(args.stored_emb_dir, gpu=args.gpu)
+            retriever = DensePassageRetriever(args.stored_emb_dir, args.aug, top_k=20, gpu=args.gpu)
         elif args.retriever == "gth":
             retriever = GroundTruthRetriever()
 
@@ -91,8 +86,8 @@ async def main():
     args, samples, llm_config, agent = init()
     
     # load embeddings
-    if args.retriever not in ['none', 'gth']:
-        await prepare_emb(args, samples, llm_config)
+    # if args.retriever not in ['none', 'gth']:
+    #     await prepare_emb(args, samples, llm_config)
 
     if args.debug:
         print(agent.generate_query(samples[0]))
