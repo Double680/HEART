@@ -70,10 +70,7 @@ class DensePassageRetriever:
                 table_cnt += 1
         
         text_scores = self.sim_func(question_emb, text_st_embs)
-        try:
-            retrieved_text_inds = sorted(torch.topk(text_scores, k=self.top_k).indices.tolist()) # torch.where(text_scores > self.top_p)[0].tolist()
-        except Exception:
-            retrieved_text_inds = [i for i in range(len(text_scores))]
+        retrieved_text_inds = torch.topk(text_scores, k=min(self.top_k, len(text_scores))).indices.tolist() 
         update_text_inds = sorted(list(set(text_table_inds).union(set(retrieved_text_inds))))
         update_texts = [sample["paragraphs"][ind] for ind in update_text_inds]
         

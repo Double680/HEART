@@ -3,3 +3,5 @@ python-dotenv
 torch
 scipy
 vllm
+transformers
+sentence_transformers

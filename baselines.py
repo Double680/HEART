@@ -1,5 +1,6 @@
 import os
 import json
+import math
 import argparse
 from baselines.base_agent import *
 from baselines.retriever import *
@@ -64,7 +65,7 @@ def init():
         args.stored_emb_dir = stored_emb_dir
 
         if args.retriever == "dpr":
-            retriever = DensePassageRetriever(args.stored_emb_dir, args.aug, top_k=20, gpu=args.gpu)
+            retriever = DensePassageRetriever(args.stored_emb_dir, args.aug, top_k=10, gpu=args.gpu)
         elif args.retriever == "gth":
             retriever = GroundTruthRetriever()
 
@@ -108,6 +109,8 @@ async def main():
                 with open(os.path.join(args.result_path_root, f'{j}.json'), 'r') as file:
                     result = json.loads(file.read())
                 pred = result['prediction'].strip('\n').split('Answer: ')[-1]
+                if args.think and '<think>' in pred and '</think>' not in pred:
+                    pred = ""
                 result['prediction'] = pred
                 if args.dev:
                     gold = samples[j]['qa']['answer']
@@ -133,11 +136,12 @@ async def main():
         print(f'Exact Match: {exact*100:.2f}, F1: {f1*100:.2f}')
 
         if args.retriever != "none":
-            text_pre, text_rec, table_pre, table_rec = 0, 0, 0, 0
+            text_pre, text_rec, text_ndcg, table_pre, table_rec, table_ndcg = 0, 0, 0, 0, 0, 0
             for i in range(end-start):
                 with open(os.path.join(args.result_path_root, f'{i}.json'), 'r') as file:
                     result = json.loads(file.read())
-                text_gth, text_pred = list(set(samples[i]['qa']['text_evidence'])), list(set(result['retrieved_text_ids']))
+                text_gth = list(dict.fromkeys(samples[i]['qa']['text_evidence']).keys())
+                text_pred = list(dict.fromkeys(result['retrieved_text_ids']).keys())
                 text_join = set(text_gth).intersection(set(text_pred))
                 try:
                     text_pre += len(list(text_join)) / len(text_pred)
@@ -147,26 +151,58 @@ async def main():
                     text_rec += len(list(text_join)) / len(text_gth)
                 except ZeroDivisionError:
                     text_rec += 1
-                table_gth, table_pred = list(set(samples[i]['qa']['table_evidence'])), list(set(result['retrieved_table_ids']))
-                table_gth_norm = []
-                for i, key in enumerate(samples[i]['table_description']):
-                    if key in table_gth:
-                        table_gth_norm.append(i)
+
+                text_dcg, text_idcg = 0, 0
+                for i, item in enumerate(text_pred):
+                    if item in text_gth:
+                        text_dcg += 1 / math.log2(i+2)
+                for i in range(len(text_gth)):
+                    if i == len(text_pred):
+                        break
+                    text_idcg += 1 / math.log2(i+2)
+                try:
+                    text_ndcg += text_dcg / text_idcg
+                except ZeroDivisionError:
+                    text_ndcg += 1
+
+                table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
+                table_pred = list(dict.fromkeys(result['retrieved_table_ids']).keys())
+
+                table_gth_dict = {key: i for i, key in enumerate(samples[i]['table_description'])}
+                table_gth_norm = [table_gth_dict[key] for key in table_gth]
+
                 table_join = set(table_gth_norm).intersection(set(table_pred))
                 try:
                     table_pre += len(list(table_join)) / len(table_pred)
                 except ZeroDivisionError:
                     table_pre += 1
                 try:
-                    table_rec += len(list(table_join)) / len(table_gth)
+                    table_rec += len(list(table_join)) / len(table_gth_norm)
                 except ZeroDivisionError:
                     table_rec += 1
+
+                table_dcg, table_idcg = 0, 0
+                for i, item in enumerate(table_pred):
+                    if item in table_gth_norm:
+                        table_dcg += 1 / math.log2(i+2)
+                for i in range(len(table_gth_norm)):
+                    if i == len(table_pred):
+                        break
+                    table_idcg += 1 / math.log2(i+2)
+                try:
+                    table_ndcg += table_dcg / table_idcg
+                except ZeroDivisionError:
+                    table_ndcg += 1
+                    
             text_pre = text_pre / (end-start)
             text_rec = text_rec / (end-start)
+            text_ndcg = text_ndcg / (end-start)
             table_pre = table_pre / (end-start)
             table_rec = table_rec / (end-start)
-            print(f'Retrieved Texts Presicion: {text_pre*100:.2f}, Recall: {text_rec*100:.2f}')
-            print(f'Retrieved Tables Presicion: {table_pre*100:.2f}, Recall: {table_rec*100:.2f}')
+            table_ndcg = table_ndcg / (end-start)
+
+            print(f'Retrieved Texts Presicion: {text_pre*100:.2f}, Recall: {text_rec*100:.2f}, NDCG: {text_ndcg*100:.2f}')
+            print(f'Retrieved Tables Presicion: {table_pre*100:.2f}, Recall: {table_rec*100:.2f}, NDCG: {table_ndcg*100:.2f}')
     else:
         results = []
         for i in range(end-start):
@@ -175,7 +211,7 @@ async def main():
             results.append({
                 "uid": result["uid"], "predicted_ans": result["prediction"], "predicted_program": []
             })
-        with open(os.path.join(args.result_path_root, 'test_predictions.json'), 'w') as file:
+        with open(os.path.join(args.result_path_root, f'test_predictions.json'), 'w') as file:
             file.write(json.dumps(results, indent=2))
         print('Predictions saved!')
 

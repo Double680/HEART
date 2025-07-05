@@ -4,3 +4,4 @@ datasets/*
 results*
 stored*
 .env
+*.sh

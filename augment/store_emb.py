@@ -23,14 +23,14 @@ for item in data:
         "table_embs": table_embs
     }
     with open(f"{save_root}/doc_embs.json", "w") as file:
-        file.write(json.dumps(sample))
+        file.write(json.dumps(doc_sample))
 
     query_embs = ret.get_emb(item['qa']['question'], query_type=True).tolist()
     query_sample = {
         "query_embs": query_embs
     }
     with open(f"{save_root}/query_embs.json", "w") as file:
-        file.write(json.dumps(sample))
+        file.write(json.dumps(query_sample))
 
 with open(f"datasets/multihiertt/{dataset_type}_raw_aug.jsonl", "r") as file:
     query_data = [json.loads(item) for item in file.readlines()]
