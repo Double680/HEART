@@ -153,11 +153,11 @@ async def main():
                     text_rec += 1
 
                 text_dcg, text_idcg = 0, 0
-                for i, item in enumerate(text_pred):
+                for j, item in enumerate(text_pred):
                     if item in text_gth:
                         text_dcg += 1 / math.log2(i+2)
-                for i in range(len(text_gth)):
-                    if i == len(text_pred):
+                for j in range(len(text_gth)):
+                    if j == len(text_pred):
                         break
                     text_idcg += 1 / math.log2(i+2)
                 try:
@@ -168,7 +168,7 @@ async def main():
                 table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
                 table_pred = list(dict.fromkeys(result['retrieved_table_ids']).keys())
 
-                table_gth_dict = {key: i for i, key in enumerate(samples[i]['table_description'])}
+                table_gth_dict = {key: j for j, key in enumerate(samples[i]['table_description'])}
                 table_gth_norm = [table_gth_dict[key] for key in table_gth]
 
                 table_join = set(table_gth_norm).intersection(set(table_pred))
