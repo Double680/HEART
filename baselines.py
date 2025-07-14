@@ -201,7 +201,10 @@ async def main():
                         id, row, col = int(id), int(row), int(col)
                         if (id, 'row', row) in cleaned_row_indices and (id, 'col', col) in cleaned_col_indices:
                             hit += 1
-                    table_rec += hit / len(table_gth)
+                    try:
+                        table_rec += hit / len(table_gth)
+                    except ZeroDivisionError:
+                        table_rec += 1
                 else:
                     table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
                     table_pred = list(dict.fromkeys(result['retrieved_table_ids']).keys())
