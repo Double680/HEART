@@ -92,7 +92,8 @@ class DensePassageRetriever:
             table_desc_st = [(int(key.split('-')[0]), table_desc[key]) for key in table_desc]
             table_scores = self.sim_func(question_emb, table_st_embs)
             retrieved_table_inds = torch.topk(table_scores, k=min(self.top_k, len(table_scores))).indices.tolist()
-            update_table_desc = [table_desc_st[ind] for ind in retrieved_table_inds]
+            update_table_inds = sorted(retrieved_table_inds)
+            update_table_desc = [table_desc_st[ind] for ind in update_table_inds]
             update_table_dict = {i: [] for i in range(len(tables))}
             for table_id, desc in update_table_desc:
                 update_table_dict[table_id].append(desc.split(f"Table {table_id} shows ")[-1])

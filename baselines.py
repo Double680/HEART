@@ -18,6 +18,7 @@ def init():
     parser.add_argument('--agent', default='e2e')
     parser.add_argument('--aug', default='none', choices=['none', 'raw_aug', 'grpo_aug'], type=str)
     parser.add_argument('--retriever', default='none')
+    parser.add_argument('--retrieve_k', default=10, type=int)
     parser.add_argument('--start', default=0, type=int)
     parser.add_argument('--end', default=-1, type=int)
     parser.add_argument('--batch', default=100, type=int)
@@ -51,7 +52,7 @@ def init():
 
     result_path_dir = f'./results'
     result_path_model = os.path.join(result_path_dir, llm_config["llm_model"].split('/')[-1])
-    result_path_agent = os.path.join(result_path_model, f'{args.agent}-{args.retriever}-{args.aug}')
+    result_path_agent = os.path.join(result_path_model, f'{args.agent}-{args.retriever}-{args.aug}-{args.retrieve_k}')
     if args.tabheader:
         result_path_root = f'{result_path_root}-tabheader'
     if args.dev:
@@ -68,7 +69,7 @@ def init():
         args.stored_emb_dir = stored_emb_dir
 
         if args.retriever == "dpr":
-            retriever = DensePassageRetriever(args.stored_emb_dir, args.aug, args.tabheader, top_k=10, gpu=args.gpu)
+            retriever = DensePassageRetriever(args.stored_emb_dir, args.aug, args.tabheader, top_k=args.retrieve_k, gpu=args.gpu)
         elif args.retriever == "gth":
             retriever = GroundTruthRetriever()
 
