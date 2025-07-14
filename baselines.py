@@ -25,6 +25,7 @@ def init():
     parser.add_argument('--gpu', default=0, type=int)
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--think', action='store_true')
+    parser.add_argument('--tabheader', action='store_true')
     args = parser.parse_args()
 
     # load data
@@ -51,11 +52,13 @@ def init():
     result_path_dir = f'./results'
     result_path_model = os.path.join(result_path_dir, llm_config["llm_model"].split('/')[-1])
     result_path_agent = os.path.join(result_path_model, f'{args.agent}-{args.retriever}-{args.aug}')
+    if args.tabheader:
+        result_path_root = f'{result_path_root}-tabheader'
     if args.dev:
         result_path_root = os.path.join(result_path_agent, 'dev')
     else:
         result_path_root = os.path.join(result_path_agent, 'test')
-
+    
     ensure_dirs(result_path_dir, result_path_model, result_path_agent, result_path_root)
     args.result_path_root = result_path_root
 
@@ -65,7 +68,7 @@ def init():
         args.stored_emb_dir = stored_emb_dir
 
         if args.retriever == "dpr":
-            retriever = DensePassageRetriever(args.stored_emb_dir, args.aug, top_k=10, gpu=args.gpu)
+            retriever = DensePassageRetriever(args.stored_emb_dir, args.aug, args.tabheader, top_k=10, gpu=args.gpu)
         elif args.retriever == "gth":
             retriever = GroundTruthRetriever()
 
@@ -155,11 +158,11 @@ async def main():
                 text_dcg, text_idcg = 0, 0
                 for j, item in enumerate(text_pred):
                     if item in text_gth:
-                        text_dcg += 1 / math.log2(i+2)
+                        text_dcg += 1 / math.log2(j+2)
                 for j in range(len(text_gth)):
                     if j == len(text_pred):
                         break
-                    text_idcg += 1 / math.log2(i+2)
+                    text_idcg += 1 / math.log2(j+2)
                 try:
                     text_ndcg += text_dcg / text_idcg
                 except ZeroDivisionError:
@@ -182,13 +185,13 @@ async def main():
                     table_rec += 1
 
                 table_dcg, table_idcg = 0, 0
-                for i, item in enumerate(table_pred):
+                for j, item in enumerate(table_pred):
                     if item in table_gth_norm:
-                        table_dcg += 1 / math.log2(i+2)
-                for i in range(len(table_gth_norm)):
-                    if i == len(table_pred):
+                        table_dcg += 1 / math.log2(j+2)
+                for j in range(len(table_gth_norm)):
+                    if j == len(table_pred):
                         break
-                    table_idcg += 1 / math.log2(i+2)
+                    table_idcg += 1 / math.log2(j+2)
                 try:
                     table_ndcg += table_dcg / table_idcg
                 except ZeroDivisionError:
