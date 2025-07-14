@@ -4,4 +4,6 @@ torch
 scipy
 vllm
 transformers
+accelerate
 sentence_transformers
+flash_attn
