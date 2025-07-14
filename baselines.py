@@ -30,16 +30,32 @@ def init():
     args = parser.parse_args()
 
     # load data
-    if args.dev:
-        input_path = './datasets/multihiertt/dev.json'
-    else:
-        input_path = './datasets/multihiertt/test.json'
+    dataset_type = "dev" if args.dev else "test"
+    dataset_root = './datasets/multihiertt'
+    input_path = f'{dataset_root}/{dataset_type}.json'
     with open(input_path, 'r') as file:
         samples = json.loads(file.read())
         for i in range(len(samples)):
             samples[i]['id'] = i
     if args.end == -1:
         args.end = len(samples)
+
+    if args.tabheader:
+        table_header_path = f'{dataset_root}/{dataset_type}_headers.json'
+        with open(table_header_path, 'r') as file:
+            table_headers = json.loads(file.read())
+        for i in range(len(samples)):
+            uid = samples[i]['uid']
+            samples[i]['table_headers'] = table_headers[uid]
+            table_header_ids = {}
+            for key in samples[i]['table_description']:
+                tid, row, col = key.split('-')
+                tid, row, col = int(tid), int(row), int(col)
+                if tid not in table_header_ids:
+                    table_header_ids[tid] = {'row': 10000, 'col': 10000}
+                table_header_ids[tid]['row'] = min(table_header_ids[tid]['row'], row-1)
+                table_header_ids[tid]['col'] = min(table_header_ids[tid]['col'], col-1)
+            samples[i]['table_headers_max_ids'] = table_header_ids
 
     # load models
     load_dotenv()
@@ -54,7 +70,7 @@ def init():
     result_path_model = os.path.join(result_path_dir, llm_config["llm_model"].split('/')[-1])
     result_path_agent = os.path.join(result_path_model, f'{args.agent}-{args.retriever}-{args.aug}-{args.retrieve_k}')
     if args.tabheader:
-        result_path_root = f'{result_path_root}-tabheader'
+        result_path_agent = f'{result_path_agent}-tabheader'
     if args.dev:
         result_path_root = os.path.join(result_path_agent, 'dev')
     else:
@@ -80,7 +96,7 @@ def init():
     elif args.agent == 'selfcst':
         agent = SelfConsistencyAgent(llm_config, result_path_root, retriever)
 
-    return args, samples, llm_config, agent
+    return args, samples, agent
 
 
 async def process_queries(queries, agent):
@@ -88,7 +104,7 @@ async def process_queries(queries, agent):
 
 
 async def main():
-    args, samples, llm_config, agent = init()
+    args, samples, agent = init()
     
     # load embeddings
     # if args.retriever not in ['none', 'gth']:
@@ -169,44 +185,65 @@ async def main():
                 except ZeroDivisionError:
                     text_ndcg += 1
 
-                table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
-                table_pred = list(dict.fromkeys(result['retrieved_table_ids']).keys())
+                if args.tabheader:
+                    table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
+                    table_pred = result['retrieved_table_ids']
+                    cleaned_col_indices, cleaned_row_indices = [], []
+                    for item in table_pred[0]:
+                        for site in item[2]:
+                            cleaned_col_indices.append((item[0], item[1], site))
+                    for item in table_pred[1]:
+                        for site in item[2]:
+                            cleaned_row_indices.append((item[0], item[1], site))
+                    hit = 0
+                    for item in table_gth:
+                        id, row, col = item.split('-')
+                        id, row, col = int(id), int(row), int(col)
+                        if (id, 'row', row) in cleaned_row_indices and (id, 'col', col) in cleaned_col_indices:
+                            hit += 1
+                    table_rec += hit / len(table_gth)
+                else:
+                    table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
+                    table_pred = list(dict.fromkeys(result['retrieved_table_ids']).keys())
+                    table_gth_dict = {key: j for j, key in enumerate(samples[i]['table_description'])}
+                    table_gth_norm = [table_gth_dict[key] for key in table_gth]
 
-                table_gth_dict = {key: j for j, key in enumerate(samples[i]['table_description'])}
-                table_gth_norm = [table_gth_dict[key] for key in table_gth]
+                    table_join = set(table_gth_norm).intersection(set(table_pred))
+                    try:
+                        table_pre += len(list(table_join)) / len(table_pred)
+                    except ZeroDivisionError:
+                        table_pre += 1
+                    try:
+                        table_rec += len(list(table_join)) / len(table_gth_norm)
+                    except ZeroDivisionError:
+                        table_rec += 1
 
-                table_join = set(table_gth_norm).intersection(set(table_pred))
-                try:
-                    table_pre += len(list(table_join)) / len(table_pred)
-                except ZeroDivisionError:
-                    table_pre += 1
-                try:
-                    table_rec += len(list(table_join)) / len(table_gth_norm)
-                except ZeroDivisionError:
-                    table_rec += 1
-
-                table_dcg, table_idcg = 0, 0
-                for j, item in enumerate(table_pred):
-                    if item in table_gth_norm:
-                        table_dcg += 1 / math.log2(j+2)
-                for j in range(len(table_gth_norm)):
-                    if j == len(table_pred):
-                        break
-                    table_idcg += 1 / math.log2(j+2)
-                try:
-                    table_ndcg += table_dcg / table_idcg
-                except ZeroDivisionError:
-                    table_ndcg += 1
+                    table_dcg, table_idcg = 0, 0
+                    for j, item in enumerate(table_pred):
+                        if item in table_gth_norm:
+                            table_dcg += 1 / math.log2(j+2)
+                    for j in range(len(table_gth_norm)):
+                        if j == len(table_pred):
+                            break
+                        table_idcg += 1 / math.log2(j+2)
+                    try:
+                        table_ndcg += table_dcg / table_idcg
+                    except ZeroDivisionError:
+                        table_ndcg += 1
                     
             text_pre = text_pre / (end-start)
             text_rec = text_rec / (end-start)
             text_ndcg = text_ndcg / (end-start)
-            table_pre = table_pre / (end-start)
-            table_rec = table_rec / (end-start)
-            table_ndcg = table_ndcg / (end-start)
-
             print(f'Retrieved Texts Presicion: {text_pre*100:.2f}, Recall: {text_rec*100:.2f}, NDCG: {text_ndcg*100:.2f}')
-            print(f'Retrieved Tables Presicion: {table_pre*100:.2f}, Recall: {table_rec*100:.2f}, NDCG: {table_ndcg*100:.2f}')
+
+            if args.tabheader:
+                table_rec = table_rec / (end-start)
+                print(f'Retrieved Tables Recall: {table_rec*100:.2f}')
+            else:
+                table_pre = table_pre / (end-start)
+                table_rec = table_rec / (end-start)
+                table_ndcg = table_ndcg / (end-start)
+                print(f'Retrieved Tables Presicion: {table_pre*100:.2f}, Recall: {table_rec*100:.2f}, NDCG: {table_ndcg*100:.2f}')
     else:
         results = []
         for i in range(end-start):
