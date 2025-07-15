@@ -16,7 +16,7 @@ def init():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dev', action='store_true')
     parser.add_argument('--agent', default='e2e')
-    parser.add_argument('--aug', default='none', choices=['none', 'raw_aug', 'grpo_aug'], type=str)
+    parser.add_argument('--aug', default='none', choices=['none', 'raw_aug', 'grpo_aug', 'tree_aug'], type=str)
     parser.add_argument('--retriever', default='none')
     parser.add_argument('--retrieve_k', default=10, type=int)
     parser.add_argument('--start', default=0, type=int)

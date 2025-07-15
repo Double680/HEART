@@ -75,6 +75,8 @@ class DensePassageRetriever:
         table_cnt = 0
         for i in range(len(paragraphs)):
             if paragraphs[i] == f'## Table {table_cnt} ##':
+                if self.tabheader:
+                    text_table_inds.append(i-1)
                 text_table_inds.append(i)
                 table_cnt += 1
         
@@ -104,7 +106,7 @@ class DensePassageRetriever:
             for i in range(len(tables)):
                 table_html = tables[i]
                 if i not in sample['table_headers_max_ids']:
-                    update_tables.append('')
+                    update_tables.append('None')
                     continue
                 row_header_length = sample['table_headers_max_ids'][i]['row']
                 row_site_base = [i for i in range(row_header_length)]

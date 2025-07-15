@@ -16,9 +16,10 @@ parser.add_argument('--tabheader', action='store_true')
 parser.add_argument('--query', action='store_true')
 parser.add_argument('--raw_aug', action='store_true')
 parser.add_argument('--grpo_aug', action='store_true')
+parser.add_argument('--tree_aug', action='store_true')
 args = parser.parse_args()
 
-retriever_model_path = 'models/qwen3-embedding-0.6b'
+retriever_model_path = '/root/autodl-tmp/models/qwen3-embedding-0.6b'
 dataset_type = "dev" if args.dev else "test"
 ret = Retriever(retriever_model_path)
 
@@ -84,7 +85,7 @@ if args.raw_aug:
 
     for item in tqdm(query_data):
         uid = item['uid']
-        save_root = f'store/{uid}'
+        save_root = f'stored/{uid}'
         if not os.path.exists(save_root):
             os.mkdir(save_root)
         query_embs = ret.get_emb(item['new_query'], query_type=True).tolist()
@@ -100,7 +101,7 @@ if args.grpo_aug:
 
     for item in tqdm(query_data):
         uid = item['uid']
-        save_root = f'store/{uid}'
+        save_root = f'stored/{uid}'
         if not os.path.exists(save_root):
             os.mkdir(save_root)
         query_embs = ret.get_emb(item['new_query'], query_type=True).tolist()
@@ -108,4 +109,20 @@ if args.grpo_aug:
             "query_embs": query_embs
         }
         with open(f"{save_root}/grpo_aug_query_embs.json", "w") as file:
+            file.write(json.dumps(sample))
+
+if args.tree_aug:
+    with open(f"datasets/multihiertt/{dataset_type}_tree_aug.jsonl", "r") as file:
+        query_data = [json.loads(item) for item in file.readlines()]
+
+    for item in tqdm(query_data):
+        uid = item['uid']
+        save_root = f'stored/{uid}'
+        if not os.path.exists(save_root):
+            os.mkdir(save_root)
+        query_embs = ret.get_emb(item['new_query'], query_type=True).tolist()
+        sample = {
+            "query_embs": query_embs
+        }
+        with open(f"{save_root}/tree_aug_query_embs.json", "w") as file:
             file.write(json.dumps(sample))
