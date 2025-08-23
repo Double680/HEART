@@ -7,13 +7,15 @@ import json
 import os
 
 
-def save_prediction(uid, pred, path, text_inds, table_inds):
+def save_prediction(uid, pred, path, text_inds, table_inds, reasoning_content=None):
     result = {
         'uid': uid,
-        'prediction': pred, 
+        'response': pred, 
         'retrieved_text_ids': text_inds,
         'retrieved_table_ids': table_inds
     }
+    if reasoning_content is not None:
+        result['reasoning_content'] = reasoning_content
     with open(path, 'w') as file:
         file.write(json.dumps(result, indent=2))
 
@@ -114,19 +116,25 @@ class E2EAgent(BaseAgent):
         uid, messages, path, text_inds, table_inds = self._preprocess_query(sample)
         if os.path.exists(path):
             return
+        reasoning_content = None
+        response = None
         while True:
             try:
                 if self.think_mode:
-                    completion = await llm_query(self.aclient, self.llm_model, messages, max_tokens=5000)
+                    completion = await llm_query(self.aclient, self.llm_model, messages, max_completion_tokens=2048)
+                    try:
+                        reasoning_content = completion.choices[0].message.reasoning_content
+                    except Exception:
+                        reasoning_content = None
                 else:
-                    completion = await llm_query(self.aclient, self.llm_model, messages, max_tokens=100)
+                    completion = await llm_query(self.aclient, self.llm_model, messages, max_completion_tokens=100)
                 response = completion.choices[0].message.content
                 break
             except Exception:
                 print('API Calling failed, retry in 5 seconds...')
                 time.sleep(5)
         
-        save_prediction(uid, response, path, text_inds, table_inds)
+        save_prediction(uid, response, path, text_inds, table_inds, reasoning_content)
     
 
 class CoTAgent(BaseAgent):

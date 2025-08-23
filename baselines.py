@@ -107,7 +107,10 @@ async def main():
                 # uid = samples[j]['uid']
                 with open(os.path.join(args.result_path_root, f'{j}.json'), 'r') as file:
                     result = json.loads(file.read())
-                pred = result['prediction'].strip('\n').split('Answer: ')[-1]
+                try:
+                    pred = result['response'].strip('\n').split('Answer: ')[-1].split('**Answer**: ')[-1].split('**Answer:** ')[-1].strip("*")
+                except Exception:
+                    pred = ""
                 result['prediction'] = pred
                 if args.dev:
                     gold = samples[j]['qa']['answer']

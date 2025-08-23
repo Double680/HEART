@@ -1,12 +1,12 @@
 from openai import AsyncOpenAI
 
 
-async def llm_query(aclient: AsyncOpenAI, model, messages, temperature=0.1, max_tokens=1000, n=1):
+async def llm_query(aclient: AsyncOpenAI, model, messages, temperature=0.1, max_completion_tokens=1024, n=1, extra_body=None):
     completion = await aclient.chat.completions.create(
         model=model,
         messages=messages,
         temperature=temperature,
-        max_tokens=max_tokens,
+        max_completion_tokens=max_completion_tokens,
         n=n
     )
     return completion
