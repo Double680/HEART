@@ -1,5 +1,6 @@
 import os
 import json
+import math
 import argparse
 from baselines.base_agent import *
 from baselines.retriever import *
@@ -15,8 +16,9 @@ def init():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dev', action='store_true')
     parser.add_argument('--agent', default='e2e')
-    parser.add_argument('--aug', default='none', choices=['none', 'raw_aug', 'grpo_aug'], type=str)
+    parser.add_argument('--aug', default='none', choices=['none', 'raw_aug', 'grpo_aug', 'tree_aug'], type=str)
     parser.add_argument('--retriever', default='none')
+    parser.add_argument('--retrieve_k', default=10, type=int)
     parser.add_argument('--start', default=0, type=int)
     parser.add_argument('--end', default=-1, type=int)
     parser.add_argument('--batch', default=100, type=int)
@@ -24,19 +26,36 @@ def init():
     parser.add_argument('--gpu', default=0, type=int)
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--think', action='store_true')
+    parser.add_argument('--tabheader', action='store_true')
     args = parser.parse_args()
 
     # load data
-    if args.dev:
-        input_path = './datasets/multihiertt/dev.json'
-    else:
-        input_path = './datasets/multihiertt/test.json'
+    dataset_type = "dev" if args.dev else "test"
+    dataset_root = './datasets/multihiertt'
+    input_path = f'{dataset_root}/{dataset_type}.json'
     with open(input_path, 'r') as file:
         samples = json.loads(file.read())
         for i in range(len(samples)):
             samples[i]['id'] = i
     if args.end == -1:
         args.end = len(samples)
+
+    if args.tabheader:
+        table_header_path = f'{dataset_root}/{dataset_type}_headers.json'
+        with open(table_header_path, 'r') as file:
+            table_headers = json.loads(file.read())
+        for i in range(len(samples)):
+            uid = samples[i]['uid']
+            samples[i]['table_headers'] = table_headers[uid]
+            table_header_ids = {}
+            for key in samples[i]['table_description']:
+                tid, row, col = key.split('-')
+                tid, row, col = int(tid), int(row), int(col)
+                if tid not in table_header_ids:
+                    table_header_ids[tid] = {'row': 10000, 'col': 10000}
+                table_header_ids[tid]['row'] = min(table_header_ids[tid]['row'], row-1)
+                table_header_ids[tid]['col'] = min(table_header_ids[tid]['col'], col-1)
+            samples[i]['table_headers_max_ids'] = table_header_ids
 
     # load models
     load_dotenv()
@@ -49,12 +68,14 @@ def init():
 
     result_path_dir = f'./results'
     result_path_model = os.path.join(result_path_dir, llm_config["llm_model"].split('/')[-1])
-    result_path_agent = os.path.join(result_path_model, f'{args.agent}-{args.retriever}-{args.aug}')
+    result_path_agent = os.path.join(result_path_model, f'{args.agent}-{args.retriever}-{args.aug}-{args.retrieve_k}')
+    if args.tabheader:
+        result_path_agent = f'{result_path_agent}-tabheader'
     if args.dev:
         result_path_root = os.path.join(result_path_agent, 'dev')
     else:
         result_path_root = os.path.join(result_path_agent, 'test')
-
+    
     ensure_dirs(result_path_dir, result_path_model, result_path_agent, result_path_root)
     args.result_path_root = result_path_root
 
@@ -64,7 +85,7 @@ def init():
         args.stored_emb_dir = stored_emb_dir
 
         if args.retriever == "dpr":
-            retriever = DensePassageRetriever(args.stored_emb_dir, args.aug, top_k=20, gpu=args.gpu)
+            retriever = DensePassageRetriever(args.stored_emb_dir, args.aug, args.tabheader, top_k=args.retrieve_k, gpu=args.gpu)
         elif args.retriever == "gth":
             retriever = GroundTruthRetriever()
 
@@ -75,7 +96,7 @@ def init():
     elif args.agent == 'selfcst':
         agent = SelfConsistencyAgent(llm_config, result_path_root, retriever)
 
-    return args, samples, llm_config, agent
+    return args, samples, agent
 
 
 async def process_queries(queries, agent):
@@ -83,7 +104,7 @@ async def process_queries(queries, agent):
 
 
 async def main():
-    args, samples, llm_config, agent = init()
+    args, samples, agent = init()
     
     # load embeddings
     # if args.retriever not in ['none', 'gth']:
@@ -136,11 +157,12 @@ async def main():
         print(f'Exact Match: {exact*100:.2f}, F1: {f1*100:.2f}')
 
         if args.retriever != "none":
-            text_pre, text_rec, table_pre, table_rec = 0, 0, 0, 0
+            text_pre, text_rec, text_ndcg, table_pre, table_rec, table_ndcg = 0, 0, 0, 0, 0, 0
             for i in range(end-start):
                 with open(os.path.join(args.result_path_root, f'{i}.json'), 'r') as file:
                     result = json.loads(file.read())
-                text_gth, text_pred = list(set(samples[i]['qa']['text_evidence'])), list(set(result['retrieved_text_ids']))
+                text_gth = list(dict.fromkeys(samples[i]['qa']['text_evidence']).keys())
+                text_pred = list(dict.fromkeys(result['retrieved_text_ids']).keys())
                 text_join = set(text_gth).intersection(set(text_pred))
                 try:
                     text_pre += len(list(text_join)) / len(text_pred)
@@ -150,26 +172,82 @@ async def main():
                     text_rec += len(list(text_join)) / len(text_gth)
                 except ZeroDivisionError:
                     text_rec += 1
-                table_gth, table_pred = list(set(samples[i]['qa']['table_evidence'])), list(set(result['retrieved_table_ids']))
-                table_gth_norm = []
-                for i, key in enumerate(samples[i]['table_description']):
-                    if key in table_gth:
-                        table_gth_norm.append(i)
-                table_join = set(table_gth_norm).intersection(set(table_pred))
+
+                text_dcg, text_idcg = 0, 0
+                for j, item in enumerate(text_pred):
+                    if item in text_gth:
+                        text_dcg += 1 / math.log2(j+2)
+                for j in range(len(text_gth)):
+                    if j == len(text_pred):
+                        break
+                    text_idcg += 1 / math.log2(j+2)
                 try:
-                    table_pre += len(list(table_join)) / len(table_pred)
+                    text_ndcg += text_dcg / text_idcg
                 except ZeroDivisionError:
-                    table_pre += 1
-                try:
-                    table_rec += len(list(table_join)) / len(table_gth)
-                except ZeroDivisionError:
-                    table_rec += 1
+                    text_ndcg += 1
+
+                if args.tabheader:
+                    table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
+                    table_pred = result['retrieved_table_ids']
+                    cleaned_col_indices, cleaned_row_indices = [], []
+                    for item in table_pred[0]:
+                        for site in item[2]:
+                            cleaned_col_indices.append((item[0], item[1], site))
+                    for item in table_pred[1]:
+                        for site in item[2]:
+                            cleaned_row_indices.append((item[0], item[1], site))
+                    hit = 0
+                    for item in table_gth:
+                        id, row, col = item.split('-')
+                        id, row, col = int(id), int(row), int(col)
+                        if (id, 'row', row) in cleaned_row_indices and (id, 'col', col) in cleaned_col_indices:
+                            hit += 1
+                    try:
+                        table_rec += hit / len(table_gth)
+                    except ZeroDivisionError:
+                        table_rec += 1
+                else:
+                    table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
+                    table_pred = list(dict.fromkeys(result['retrieved_table_ids']).keys())
+                    table_gth_dict = {key: j for j, key in enumerate(samples[i]['table_description'])}
+                    table_gth_norm = [table_gth_dict[key] for key in table_gth]
+
+                    table_join = set(table_gth_norm).intersection(set(table_pred))
+                    try:
+                        table_pre += len(list(table_join)) / len(table_pred)
+                    except ZeroDivisionError:
+                        table_pre += 1
+                    try:
+                        table_rec += len(list(table_join)) / len(table_gth_norm)
+                    except ZeroDivisionError:
+                        table_rec += 1
+
+                    table_dcg, table_idcg = 0, 0
+                    for j, item in enumerate(table_pred):
+                        if item in table_gth_norm:
+                            table_dcg += 1 / math.log2(j+2)
+                    for j in range(len(table_gth_norm)):
+                        if j == len(table_pred):
+                            break
+                        table_idcg += 1 / math.log2(j+2)
+                    try:
+                        table_ndcg += table_dcg / table_idcg
+                    except ZeroDivisionError:
+                        table_ndcg += 1
+                    
             text_pre = text_pre / (end-start)
             text_rec = text_rec / (end-start)
-            table_pre = table_pre / (end-start)
-            table_rec = table_rec / (end-start)
-            print(f'Retrieved Texts Presicion: {text_pre*100:.2f}, Recall: {text_rec*100:.2f}')
-            print(f'Retrieved Tables Presicion: {table_pre*100:.2f}, Recall: {table_rec*100:.2f}')
+            text_ndcg = text_ndcg / (end-start)
+            print(f'Retrieved Texts Presicion: {text_pre*100:.2f}, Recall: {text_rec*100:.2f}, NDCG: {text_ndcg*100:.2f}')
+
+            if args.tabheader:
+                table_rec = table_rec / (end-start)
+                print(f'Retrieved Tables Recall: {table_rec*100:.2f}')
+            else:
+                table_pre = table_pre / (end-start)
+                table_rec = table_rec / (end-start)
+                table_ndcg = table_ndcg / (end-start)
+                print(f'Retrieved Tables Presicion: {table_pre*100:.2f}, Recall: {table_rec*100:.2f}, NDCG: {table_ndcg*100:.2f}')
     else:
         results = []
         for i in range(end-start):
@@ -178,7 +256,7 @@ async def main():
             results.append({
                 "uid": result["uid"], "predicted_ans": result["prediction"], "predicted_program": []
             })
-        with open(os.path.join(args.result_path_root, 'test_predictions.json'), 'w') as file:
+        with open(os.path.join(args.result_path_root, f'test_predictions.json'), 'w') as file:
             file.write(json.dumps(results, indent=2))
         print('Predictions saved!')
 
