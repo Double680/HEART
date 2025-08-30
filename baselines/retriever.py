@@ -32,7 +32,7 @@ class GroundTruthRetriever:
         update_table_desc = [table_desc_st[ind] for ind in table_inds]
         update_table_dict = {i: [] for i in range(len(tables))}
         for table_id, desc in update_table_desc:
-            update_table_dict[table_id].append(desc.split(f"Table {table_id} shows ")[-1])
+            update_table_dict[table_id].append(desc)
         update_tables = ["\n".join(update_table_dict[i]) for i in range(len(tables))]    
         
         return update_texts, update_tables, text_inds, table_inds
@@ -127,7 +127,7 @@ class DensePassageRetriever:
             update_table_desc = [table_desc_st[ind] for ind in update_table_inds]
             update_table_dict = {i: [] for i in range(len(tables))}
             for table_id, desc in update_table_desc:
-                update_table_dict[table_id].append(desc.split(f"Table {table_id} shows ")[-1])
+                update_table_dict[table_id].append(desc)
             update_tables = ["\n".join(update_table_dict[i]) for i in range(len(tables))]    
 
         return update_texts, update_tables, retrieved_text_inds, retrieved_table_inds
