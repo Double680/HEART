@@ -122,7 +122,7 @@ async def main():
                 with open(os.path.join(args.result_path_root, f'{j}.json'), 'r') as file:
                     result = json.loads(file.read())
                 try:
-                    pred = result['response'].strip('\n').split('Answer: ')[-1].split('**Answer**: ')[-1].split('**Answer:** ')[-1].strip("*")
+                    pred = result['response'].strip('\n').split('<answer>')[-1].split('</answer>')[0].strip('*').strip()
                 except Exception:
                     pred = ""
                 result['prediction'] = pred
