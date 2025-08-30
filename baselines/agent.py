@@ -44,7 +44,7 @@ class ThinkAgent:
         self.llm_model = config['llm_model']
         self.result_path = result_path
         self.retriever = retriever
-        self.message_template = "Answer the given question according to the given document. Put the direct answer within <answer></answer> tags. <document><DOCUMENT></document><question><QUESTION></question>"
+        self.message_template = "Answer the given question according to the given document. Put the direct answer without any other text within <answer></answer> tags. <document><DOCUMENT></document><question><QUESTION></question>"
 
 
     def preprocess(self, sample):
