@@ -152,6 +152,10 @@ async def main():
             exact_acc, f1_acc = get_span_selection_metrics(pred, gold)
             exact += exact_acc
             f1 += f1_acc
+            result["exact_match"] = exact_acc
+            result["f1_score"] = f1_acc
+            with open(os.path.join(args.result_path_root, f'{i}.json'), 'w') as file:
+                file.write(json.dumps(result, indent=2))
         exact = exact / (end-start)
         f1 = f1 / (end-start)
         print(f'Exact Match: {exact*100:.2f}, F1: {f1*100:.2f}')
