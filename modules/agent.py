@@ -1,3 +1,5 @@
+import sys
+
 from openai import AsyncOpenAI
 from utils.api_query import *
 from copy import copy
@@ -44,7 +46,8 @@ class ThinkAgent:
         self.llm_model = config['llm_model']
         self.result_path = result_path
         self.retriever = retriever
-        self.message_template = "Answer the given question according to the given document. Put the direct answer without any other text within <answer></answer> tags. <document><DOCUMENT></document><question><QUESTION></question>"
+        with open('./modules/template.txt', 'r') as file:
+            self.message_template = file.read()
 
 
     def preprocess(self, sample):

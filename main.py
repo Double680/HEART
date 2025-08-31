@@ -2,8 +2,8 @@ import os
 import json
 import math
 import argparse
-from baselines.agent import *
-from baselines.retriever import *
+from modules.agent import *
+from modules.retriever import *
 from utils.evaluate import *
 # from utils.embedding import *
 from utils.util import *

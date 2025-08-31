@@ -1,0 +1,5 @@
+According to the given document within <document></document> tags, please answer the question within <question></question> tags and put the direct answer without other text within <answer></answer> tags. Some examples of acceptable answer format are: <answer>2025 2026</answer>, <answer>yes</answer>, <answer>jane smith</answer>, <answer>0.5386</answer>
+
+Here is the document question answering task you need to solve: 
+<document><DOCUMENT></document>
+<question><QUESTION></question>

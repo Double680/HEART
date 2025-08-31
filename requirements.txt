@@ -1,6 +1,6 @@
 openai
 python-dotenv
-torch
+torch==2.6.0
 scipy
 vllm
 transformers
