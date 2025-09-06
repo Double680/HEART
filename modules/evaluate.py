@@ -120,6 +120,8 @@ def get_span_selection_metrics(predicted, gold):
 
 
 def evaluate(args, start, end):
+    start = args.start
+    end = args.end
     samples = args.samples
     save_root = args.save_root_setting
 

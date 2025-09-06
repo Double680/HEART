@@ -37,12 +37,11 @@ async def run_sample(args):
 
         process_output(args, left, right)
 
-    evaluate(args, start, end)
-
 
 async def main():
     args = init()
     await run_sample(args)
+    evaluate(args)
 
 
 if __name__ == "__main__":
