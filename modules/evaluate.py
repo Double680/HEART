@@ -119,7 +119,7 @@ def get_span_selection_metrics(predicted, gold):
     return exact_match, f1
 
 
-def evaluate(args, start, end):
+def evaluate(args):
     start = args.start
     end = args.end
     samples = args.samples
