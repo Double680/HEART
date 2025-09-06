@@ -7,3 +7,4 @@ stored*
 .env
 *.sh
 *.out
+*.ipynb

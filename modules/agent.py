@@ -1,7 +1,7 @@
 import sys
 
 from openai import AsyncOpenAI
-from utils.api_query import *
+from modules.api_query import *
 from copy import copy
 import time
 import json
@@ -40,12 +40,15 @@ def process_raw_sample(sample):
 
 class ThinkAgent:
 
-    def __init__(self, config, result_path, retriever):
-
-        self.aclient = AsyncOpenAI(base_url=config['base_url'], api_key=config['api_key'])
-        self.llm_model = config['llm_model']
-        self.result_path = result_path
-        self.retriever = retriever
+    def __init__(self, args):
+        llm_config = args.llm_config
+        self.aclient = AsyncOpenAI(
+            base_url=llm_config['base_url'], 
+            api_key=llm_config['api_key']
+        )
+        self.llm_model = llm_config['llm_model']
+        self.result_path = args.save_root_setting
+        self.retriever = args.retriever
         with open('./modules/template.txt', 'r') as file:
             self.message_template = file.read()
 
