@@ -29,6 +29,7 @@ def init_args():
     parser.add_argument("--top_k", default=10, type=int)  # only for dpr
     parser.add_argument("--query_aug", default="none", choices=["none", "raw_aug", "grpo_aug"])  # only for dpr
     parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
+    parser.add_argument("--tabheader", action="store_true")  # only for dpr
 
     args = parser.parse_args()
 

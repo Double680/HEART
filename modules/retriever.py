@@ -56,29 +56,7 @@ class DensePassageRetriever:
         self.sim_func = nn.CosineSimilarity(dim=-1)
         self.device = "cuda"       
 
-    def retrieve(self, sample):
-        uid = sample['uid']
-        doc_emb_path = os.path.join(self.path_root, uid, "doc_embs.json")
-        with open(doc_emb_path, "r") as file:
-            emb_dict = json.loads(file.read())
-        text_st_embs = torch.tensor(emb_dict["text_embs"]).to(self.device)
-        # if self.tabheader:
-        #     table_header_emb_path = os.path.join(self.path_root, uid, "table_header_embs.json")
-        #     with open(table_header_emb_path, "r") as file:
-        #         header_emb_dict = json.loads(file.read())
-        #     table_col_embs = torch.tensor(header_emb_dict["table_col_embs"]).to(self.device)
-        #     table_row_embs = torch.tensor(header_emb_dict["table_row_embs"]).to(self.device)
-        # else:
-        table_st_embs = torch.tensor(emb_dict["table_embs"]).to(self.device)
-        if self.aug != 'none':
-            query_emb_path = os.path.join(self.path_root, uid, f"{self.aug}_query_embs.json")
-        else:
-            query_emb_path = os.path.join(self.path_root, uid, "query_embs.json")
-        with open(query_emb_path, "r") as file:
-            query_emb_dict = json.loads(file.read())
-            question_emb = torch.tensor(query_emb_dict["query_embs"]).to(self.device)
-        
-        # retrieve
+    def retrieve_text_evidence(self, sample, question_emb, text_st_embs):
         paragraphs = sample["paragraphs"]
         text_table_inds = []
         table_cnt = 0
@@ -102,7 +80,10 @@ class DensePassageRetriever:
             set(text_table_inds).union(set(retrieved_text_inds)).union(set(expand_text_inds))
         )) 
         update_texts = [sample["paragraphs"][ind] for ind in update_text_inds]
-        
+
+        return update_texts, retrieved_text_inds
+
+    def retrieve_table_evidence(self, sample, question_emb, table_st_embs):
         tables = sample['tables']
         # if self.tabheader:
         #     table_doc = get_table_docs(sample['table_headers'])
@@ -146,7 +127,35 @@ class DensePassageRetriever:
         update_table_dict = {i: [] for i in range(len(tables))}
         for table_id, desc in update_table_desc:
             update_table_dict[table_id].append(desc)
-        update_tables = ["\n".join(update_table_dict[i]) for i in range(len(tables))]    
+        update_tables = ["\n".join(update_table_dict[i]) for i in range(len(tables))]
+
+        return update_tables, retrieved_table_inds
+
+    def retrieve(self, sample):
+        uid = sample['uid']
+        doc_emb_path = os.path.join(self.path_root, uid, "doc_embs.json")
+        with open(doc_emb_path, "r") as file:
+            emb_dict = json.loads(file.read())
+        text_st_embs = torch.tensor(emb_dict["text_embs"]).to(self.device)
+        # if self.tabheader:
+        #     table_header_emb_path = os.path.join(self.path_root, uid, "table_header_embs.json")
+        #     with open(table_header_emb_path, "r") as file:
+        #         header_emb_dict = json.loads(file.read())
+        #     table_col_embs = torch.tensor(header_emb_dict["table_col_embs"]).to(self.device)
+        #     table_row_embs = torch.tensor(header_emb_dict["table_row_embs"]).to(self.device)
+        # else:
+        table_st_embs = torch.tensor(emb_dict["table_embs"]).to(self.device)
+        if self.aug != 'none':
+            query_emb_path = os.path.join(self.path_root, uid, f"{self.aug}_query_embs.json")
+        else:
+            query_emb_path = os.path.join(self.path_root, uid, "query_embs.json")
+        with open(query_emb_path, "r") as file:
+            query_emb_dict = json.loads(file.read())
+            question_emb = torch.tensor(query_emb_dict["query_embs"]).to(self.device)
+        
+        # retrieve
+        update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, question_emb, text_st_embs)
+        update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, question_emb, table_st_embs)
 
         return update_texts, update_tables, retrieved_text_inds, retrieved_table_inds
         
