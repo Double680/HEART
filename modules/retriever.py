@@ -8,6 +8,7 @@ from utils.subtable_generator import *
 class GroundTruthRetriever:
     def __init__(self, args):
         self.text_expand = args.text_expand
+        self.tabheader = args.tabheader
 
     def retrieve(self, sample):
         paragraphs = sample["paragraphs"]
@@ -30,19 +31,23 @@ class GroundTruthRetriever:
         ))
         update_texts = [paragraphs[ind] for ind in update_text_inds]
 
-        table_keys = sample['qa']['table_evidence']
-        tables = [sample['table_description'][item] for item in table_keys]
-        table_inds = []
-        for i, key in enumerate(sample['table_description']):
-            if key in table_keys:
-                table_inds.append(i)
-        tables, table_desc = sample['tables'], sample['table_description']
-        table_desc_st = [(int(key.split('-')[0]), table_desc[key]) for key in table_desc]
-        update_table_desc = [table_desc_st[ind] for ind in table_inds]
-        update_table_dict = {i: [] for i in range(len(tables))}
-        for table_id, desc in update_table_desc:
-            update_table_dict[table_id].append(desc)
-        update_tables = ["\n".join(update_table_dict[i]) for i in range(len(tables))]    
+        if self.tabheader:
+            update_tables = sample['tables']
+            table_inds = None
+        else:
+            table_keys = sample['qa']['table_evidence']
+            tables = [sample['table_description'][item] for item in table_keys]
+            table_inds = []
+            for i, key in enumerate(sample['table_description']):
+                if key in table_keys:
+                    table_inds.append(i)
+            tables, table_desc = sample['tables'], sample['table_description']
+            table_desc_st = [(int(key.split('-')[0]), table_desc[key]) for key in table_desc]
+            update_table_desc = [table_desc_st[ind] for ind in table_inds]
+            update_table_dict = {i: [] for i in range(len(tables))}
+            for table_id, desc in update_table_desc:
+                update_table_dict[table_id].append(desc)
+            update_tables = ["\n".join(update_table_dict[i]) for i in range(len(tables))]    
         
         return update_texts, update_tables, text_inds, table_inds
 
