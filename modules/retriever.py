@@ -53,6 +53,7 @@ class DensePassageRetriever:
         self.text_expand = args.text_expand
         self.aug = args.query_aug
         self.top_k = args.top_k
+        self.tabheader = args.tabheader
         self.sim_func = nn.CosineSimilarity(dim=-1)
         self.device = "cuda"       
 
@@ -62,8 +63,8 @@ class DensePassageRetriever:
         table_cnt = 0
         for i in range(len(paragraphs)):
             if paragraphs[i] == f'## Table {table_cnt} ##':
-                # if self.tabheader:
-                #     text_table_inds.append(i-1)
+                if self.tabheader:
+                    text_table_inds.append(i-1)
                 text_table_inds.append(i)
                 table_cnt += 1
         
@@ -155,7 +156,11 @@ class DensePassageRetriever:
         
         # retrieve
         update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, question_emb, text_st_embs)
-        update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, question_emb, table_st_embs)
+        if self.tabheader:
+            update_tables = sample['tables']
+            retrieved_table_inds = None
+        else:
+            update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, question_emb, table_st_embs)
 
         return update_texts, update_tables, retrieved_text_inds, retrieved_table_inds
         
