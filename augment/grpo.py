@@ -66,7 +66,7 @@ def reward_func_text(completions, **kwargs):
         retriever.eval(retriever.retrieve(question, text_doc), text_evid)[2] 
         for question, text_doc, text_evid in zip(questions, text_docs, text_evids)
     ]
-    retrieve_rewards = [reward_value(text_score) for text_score in text_scores]
+    retrieve_rewards = [reward_value(text_score)*2 for text_score in text_scores]
     rewards = [fr + rr for fr, rr in zip(format_rewards, retrieve_rewards)]
     return rewards
 
