@@ -31,6 +31,8 @@ def init_args():
     parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
     parser.add_argument("--tabheader", action="store_true")  # only for dpr and gth
 
+    parser.add_argument("--eval", action="store_true")
+
     args = parser.parse_args()
 
     return args
@@ -75,8 +77,8 @@ def init_model_config(args):
             setting += f"_top{args.top_k}"
             if args.query_aug != "none":
                 setting += f"_{args.query_aug}"
-            if args.tabheader:
-                setting += "_tabheader"
+        if args.tabheader:
+            setting += "_tabheader"
     save_root_setting = os.path.join(save_root_model, setting)
 
     ensure_dirs(save_root, save_root_model, save_root_setting)

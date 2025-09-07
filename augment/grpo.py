@@ -76,7 +76,7 @@ if __name__ == "__main__":
     parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text'])
     args = parser.parse_args()
 
-    train_data_path = 'datasets/multihiertt/train.json'
+    train_data_path = 'datasets/multihiertt/train_new.json'
     retriever_model_path = 'models/Qwen3-Embedding-0.6B'
     augment_model_path = 'models/Qwen3-1.7B'
     save_model_path = f'models/HybTQA-{args.aug_type}'

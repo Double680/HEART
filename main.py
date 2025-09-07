@@ -40,7 +40,8 @@ async def run_sample(args):
 
 async def main():
     args = init()
-    await run_sample(args)
+    if not args.eval:
+        await run_sample(args)
     evaluate(args)
 
 
