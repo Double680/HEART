@@ -90,7 +90,7 @@ if __name__ == "__main__":
     retriever = Retriever(retriever_model_path)
 
     training_args = GRPOConfig(
-        output_dir="HybTQA-test",
+        output_dir=save_model_path,
         learning_rate=1e-5,
         num_train_epochs=2,
         per_device_train_batch_size=32,
