@@ -28,6 +28,7 @@ def init_args():
     parser.add_argument("--text_expand", action="store_true")  # only for dpr and gth
     parser.add_argument("--top_k", default=10, type=int)  # only for dpr
     parser.add_argument("--query_aug", default="none", choices=["none", "raw_aug", "grpo_aug"])  # only for dpr
+    parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
 
     args = parser.parse_args()
 
@@ -62,7 +63,7 @@ def init_model_config(args):
     args.llm_config = llm_config
 
     save_root = args.save_root
-    save_root_model = os.path.join(save_root, llm_model)
+    save_root_model = os.path.join(save_root, llm_model.split('/')[-1])
 
     setting = "e2e"
     if args.retrieve_type != "none":
