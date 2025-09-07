@@ -75,6 +75,8 @@ def init_model_config(args):
             setting += f"_top{args.top_k}"
             if args.query_aug != "none":
                 setting += f"_{args.query_aug}"
+            if args.tabheader:
+                setting += "_tabheader"
     save_root_setting = os.path.join(save_root_model, setting)
 
     ensure_dirs(save_root, save_root_model, save_root_setting)

@@ -193,33 +193,34 @@ def evaluate(args):
                 #     except ZeroDivisionError:
                 #         table_rec += 1
                 # else:
-                table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
-                table_pred = list(dict.fromkeys(result['retrieved_table_ids']).keys())
-                table_gth_dict = {key: j for j, key in enumerate(samples[i]['table_description'])}
-                table_gth_norm = [table_gth_dict[key] for key in table_gth]
+                if not args.tabheader:
+                    table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
+                    table_pred = list(dict.fromkeys(result['retrieved_table_ids']).keys())
+                    table_gth_dict = {key: j for j, key in enumerate(samples[i]['table_description'])}
+                    table_gth_norm = [table_gth_dict[key] for key in table_gth]
 
-                table_join = set(table_gth_norm).intersection(set(table_pred))
-                try:
-                    table_pre += len(list(table_join)) / len(table_pred)
-                except ZeroDivisionError:
-                    table_pre += 1
-                try:
-                    table_rec += len(list(table_join)) / len(table_gth_norm)
-                except ZeroDivisionError:
-                    table_rec += 1
+                    table_join = set(table_gth_norm).intersection(set(table_pred))
+                    try:
+                        table_pre += len(list(table_join)) / len(table_pred)
+                    except ZeroDivisionError:
+                        table_pre += 1
+                    try:
+                        table_rec += len(list(table_join)) / len(table_gth_norm)
+                    except ZeroDivisionError:
+                        table_rec += 1
 
-                table_dcg, table_idcg = 0, 0
-                for j, item in enumerate(table_pred):
-                    if item in table_gth_norm:
-                        table_dcg += 1 / math.log2(j+2)
-                for j in range(len(table_gth_norm)):
-                    if j == len(table_pred):
-                        break
-                    table_idcg += 1 / math.log2(j+2)
-                try:
-                    table_ndcg += table_dcg / table_idcg
-                except ZeroDivisionError:
-                    table_ndcg += 1
+                    table_dcg, table_idcg = 0, 0
+                    for j, item in enumerate(table_pred):
+                        if item in table_gth_norm:
+                            table_dcg += 1 / math.log2(j+2)
+                    for j in range(len(table_gth_norm)):
+                        if j == len(table_pred):
+                            break
+                        table_idcg += 1 / math.log2(j+2)
+                    try:
+                        table_ndcg += table_dcg / table_idcg
+                    except ZeroDivisionError:
+                        table_ndcg += 1
                     
             text_pre = text_pre / (end-start)
             text_rec = text_rec / (end-start)
@@ -230,10 +231,11 @@ def evaluate(args):
             #     table_rec = table_rec / (end-start)
             #     print(f'Retrieved Tables Recall: {table_rec*100:.2f}')
             # else:
-            table_pre = table_pre / (end-start)
-            table_rec = table_rec / (end-start)
-            table_ndcg = table_ndcg / (end-start)
-            print(f'Retrieved Tables Presicion: {table_pre*100:.2f}, Recall: {table_rec*100:.2f}, NDCG: {table_ndcg*100:.2f}')
+            if not args.tabheader:
+                table_pre = table_pre / (end-start)
+                table_rec = table_rec / (end-start)
+                table_ndcg = table_ndcg / (end-start)
+                print(f'Retrieved Tables Presicion: {table_pre*100:.2f}, Recall: {table_rec*100:.2f}, NDCG: {table_ndcg*100:.2f}')
 
     else:
         results = []
