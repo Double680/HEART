@@ -1,3 +1,6 @@
+import sys
+sys.path.append('./')
+
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 import torch
@@ -6,7 +9,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dev', action='store_true')
-parser.add_argument('--grpo', action='store_true')
+parser.add_argument('--name', type=str)
 parser.add_argument('--path', type=str, default='models/Qwen3-1.7B')
 args = parser.parse_args()
 
@@ -20,8 +23,9 @@ if args.grpo:
 else:
     augment_type = "raw"
 
-src_file = f"datasets/multihiertt/{dataset_type}.json"
-tgt_file = f"datasets/multihiertt/{dataset_type}_{augment_type}_aug.jsonl"
+data_root = f"./datasets/multihiertt"
+src_file = f"{data_root}/{dataset_type}.json"
+tgt_file = f"{data_root}/{dataset_type}_{args.name}.jsonl"
 
 model = AutoModelForCausalLM.from_pretrained(
     model_path,
@@ -53,7 +57,7 @@ for item in tqdm(dataset):
     model_inputs = tokenizer([text], return_tensors="pt").to("cuda")
     generated_ids = model.generate(
         **model_inputs,
-        temperature=0.7,
+        temperature=0.6,
         top_p=0.95,
         max_new_tokens=256
     )
