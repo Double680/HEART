@@ -18,11 +18,7 @@ if args.dev:
     dataset_type = "dev"
 else:
     dataset_type = "test"
-if args.grpo:
-    augment_type = "grpo"
-else:
-    augment_type = "raw"
-
+    
 data_root = f"./datasets/multihiertt"
 src_file = f"{data_root}/{dataset_type}.json"
 tgt_file = f"{data_root}/{dataset_type}_{args.name}.jsonl"
