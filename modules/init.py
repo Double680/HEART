@@ -25,7 +25,6 @@ def init_args():
 
     parser.add_argument("--retrieve_type", default="none", choices=["none", "dpr", "gth"])
 
-    parser.add_argument("--text_expand", action="store_true")  # only for dpr and gth
     parser.add_argument("--top_k", default=10, type=int)  # only for dpr
     parser.add_argument("--query_aug", default="none", choices=["none", "raw_aug", "grpo_aug"])  # only for dpr
     parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
@@ -71,8 +70,6 @@ def init_model_config(args):
     setting = "e2e"
     if args.retrieve_type != "none":
         setting = args.retrieve_type
-        if args.text_expand:
-            setting += "_textexp"
         if args.retrieve_type == "dpr":
             setting += f"_top{args.top_k}"
             if args.query_aug != "none":

@@ -7,7 +7,6 @@ from utils.subtable_generator import *
 
 class GroundTruthRetriever:
     def __init__(self, args):
-        self.text_expand = args.text_expand
         self.tabheader = args.tabheader
 
     def retrieve(self, sample):
@@ -19,15 +18,8 @@ class GroundTruthRetriever:
                 text_table_inds.append(i)
                 table_cnt += 1
         text_inds = sample['qa']['text_evidence']
-        expand_text_inds = []
-        if self.text_expand:
-            for ind in text_inds:
-                if ind - 1 >= 0:
-                    expand_text_inds.append(ind - 1)
-                if ind + 1 < len(paragraphs):
-                    expand_text_inds.append(ind + 1)
         update_text_inds = sorted(list(
-            set(text_table_inds).union(set(text_inds)).union(set(expand_text_inds))
+            set(text_table_inds).union(set(text_inds))
         ))
         update_texts = [paragraphs[ind] for ind in update_text_inds]
 
@@ -55,7 +47,6 @@ class GroundTruthRetriever:
 class DensePassageRetriever:
     def __init__(self, args):
         self.path_root = args.stored_embs_path
-        self.text_expand = args.text_expand
         self.aug = args.query_aug
         self.top_k = args.top_k
         self.tabheader = args.tabheader
@@ -75,15 +66,8 @@ class DensePassageRetriever:
         
         text_scores = self.sim_func(question_emb, text_st_embs)
         retrieved_text_inds = torch.topk(text_scores, k=min(self.top_k, len(text_scores))).indices.tolist()
-        expand_text_inds = []
-        if self.text_expand:
-            for ind in retrieved_text_inds:
-                if ind - 1 >= 0:
-                    expand_text_inds.append(ind - 1)
-                if ind + 1 < len(paragraphs):
-                    expand_text_inds.append(ind + 1)
         update_text_inds = sorted(list(
-            set(text_table_inds).union(set(retrieved_text_inds)).union(set(expand_text_inds))
+            set(text_table_inds).union(set(retrieved_text_inds))
         )) 
         update_texts = [sample["paragraphs"][ind] for ind in update_text_inds]
 
