@@ -2,8 +2,9 @@ import os
 import json
 import torch
 import torch.nn as nn
-from utils.table_header import *
-from utils.subtable_generator import *
+# from utils.table_header import *
+# from utils.subtable_generator import *
+from modules.process_tables import *
 
 class GroundTruthRetriever:
     def __init__(self, args):
@@ -123,7 +124,27 @@ class DensePassageRetriever:
         return update_tables, retrieved_table_inds
 
     def retrieve_tabform_table_evidence(self, sample, question_emb):
-        pass
+        tables = sample['tables']
+        table_description = sample["table_description"]
+        table_trees = process_table_trees(tables, table_description)
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def retrieve(self, sample):
         uid = sample['uid']
