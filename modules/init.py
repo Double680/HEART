@@ -26,7 +26,7 @@ def init_args():
     parser.add_argument("--retrieve_type", default="none", choices=["none", "dpr", "gth"])
 
     parser.add_argument("--top_k", default=10, type=int)  # only for dpr
-    parser.add_argument("--query_aug", default="none", choices=["none", "raw_aug", "grpo_aug"])  # only for dpr
+    parser.add_argument("--query_aug", default="none", choices=["none", "raw_aug", "text_aug", "joint_aug"])  # only for dpr
     parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
     parser.add_argument("--tabform", action="store_true")  # only for dpr or gth
     parser.add_argument("--tabextract", action="store_true")  # only for dpr and tabform
