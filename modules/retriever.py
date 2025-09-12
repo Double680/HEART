@@ -7,7 +7,7 @@ from utils.subtable_generator import *
 
 class GroundTruthRetriever:
     def __init__(self, args):
-        self.tabheader = args.tabheader
+        self.tabform = args.tabform
 
     def retrieve(self, sample):
         paragraphs = sample["paragraphs"]
@@ -23,7 +23,7 @@ class GroundTruthRetriever:
         ))
         update_texts = [paragraphs[ind] for ind in update_text_inds]
 
-        if self.tabheader:
+        if self.tabform:
             update_tables = sample['tables']
             table_inds = None
         else:
@@ -49,7 +49,8 @@ class DensePassageRetriever:
         self.path_root = args.stored_embs_path
         self.aug = args.query_aug
         self.top_k = args.top_k
-        self.tabheader = args.tabheader
+        self.tabform = args.tabform
+        self.tabextract = args.tabextract
         self.sim_func = nn.CosineSimilarity(dim=-1)
         self.device = "cuda"       
 
@@ -59,7 +60,7 @@ class DensePassageRetriever:
         table_cnt = 0
         for i in range(len(paragraphs)):
             if paragraphs[i] == f'## Table {table_cnt} ##':
-                if self.tabheader:
+                if self.tabform:
                     text_table_inds.append(i-1)
                 text_table_inds.append(i)
                 table_cnt += 1
@@ -121,6 +122,9 @@ class DensePassageRetriever:
 
         return update_tables, retrieved_table_inds
 
+    def retrieve_tabform_table_evidence(self, sample, question_emb):
+        pass
+
     def retrieve(self, sample):
         uid = sample['uid']
         doc_emb_path = os.path.join(self.path_root, uid, "doc_embs.json")
@@ -145,9 +149,12 @@ class DensePassageRetriever:
         
         # retrieve
         update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, question_emb, text_st_embs)
-        if self.tabheader:
-            update_tables = sample['tables']
-            retrieved_table_inds = None
+        if self.tabform:
+            if self.tabextract:
+                update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, question_emb)
+            else:
+                update_tables = sample['tables']
+                retrieved_table_inds = None
         else:
             update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, question_emb, table_st_embs)
 

@@ -28,7 +28,8 @@ def init_args():
     parser.add_argument("--top_k", default=10, type=int)  # only for dpr
     parser.add_argument("--query_aug", default="none", choices=["none", "raw_aug", "grpo_aug"])  # only for dpr
     parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
-    parser.add_argument("--tabheader", action="store_true")  # only for dpr and gth
+    parser.add_argument("--tabform", action="store_true")  # only for dpr or gth
+    parser.add_argument("--tabextract", action="store_true")  # only for dpr and tabform
 
     parser.add_argument("--eval", action="store_true")
 
@@ -74,8 +75,8 @@ def init_model_config(args):
             setting += f"_top{args.top_k}"
             if args.query_aug != "none":
                 setting += f"_{args.query_aug}"
-        if args.tabheader:
-            setting += "_tabheader"
+        if args.tabform:
+            setting += "_tabform"
     save_root_setting = os.path.join(save_root_model, setting)
 
     ensure_dirs(save_root, save_root_model, save_root_setting)

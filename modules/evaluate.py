@@ -193,7 +193,7 @@ def evaluate(args):
                 #     except ZeroDivisionError:
                 #         table_rec += 1
                 # else:
-                if not args.tabheader:
+                if not args.tabform:
                     table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
                     table_pred = list(dict.fromkeys(result['retrieved_table_ids']).keys())
                     table_gth_dict = {key: j for j, key in enumerate(samples[i]['table_description'])}
@@ -231,7 +231,7 @@ def evaluate(args):
             #     table_rec = table_rec / (end-start)
             #     print(f'Retrieved Tables Recall: {table_rec*100:.2f}')
             # else:
-            if not args.tabheader:
+            if not args.tabform:
                 table_pre = table_pre / (end-start)
                 table_rec = table_rec / (end-start)
                 table_ndcg = table_ndcg / (end-start)

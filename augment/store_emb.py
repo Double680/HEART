@@ -12,7 +12,7 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser()
 parser.add_argument('--dev', action='store_true')
 parser.add_argument('--doc', action='store_true')
-parser.add_argument('--tabheader', action='store_true')
+parser.add_argument('--tabform', action='store_true')
 parser.add_argument('--query', action='store_true')
 parser.add_argument('--raw_aug', action='store_true')
 parser.add_argument('--grpo_aug', action='store_true')
@@ -42,7 +42,7 @@ if args.doc:
         with open(f"{save_root}/doc_embs.json", "w") as file:
             file.write(json.dumps(doc_sample))
 
-if args.tabheader:
+if args.tabform:
     with open(f"datasets/multihiertt/{dataset_type}_headers.json", "r") as file:
         header_dict = json.loads(file.read())
     for item in tqdm(data):
