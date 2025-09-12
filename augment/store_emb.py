@@ -16,7 +16,7 @@ parser.add_argument('--query_aug', type=str)
 parser.add_argument('--tree_aug', action='store_true')
 args = parser.parse_args()
 
-retriever_model_path = '/root/autodl-tmp/qwen3-embedding-0.6b'
+retriever_model_path = 'models/Qwen3-Embedding-0.6B'
 dataset_type = "dev" if args.dev else "test"
 ret = Retriever(retriever_model_path)
 
