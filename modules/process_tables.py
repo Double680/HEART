@@ -28,6 +28,8 @@ class TableStructure:
 
 
     def _init_header(self):
+        self.row_header_boundary = min(self.row_header_boundary, self.row_data_boundary)
+        self.col_header_boundary = min(self.col_header_boundary, self.col_data_boundary)
         row_id = 0
         while True:
             if self.type_table[row_id][0] != 'empty' or row_id == self.row_data_boundary:
@@ -47,16 +49,19 @@ class TableStructure:
             self.col_header_boundary = col_id
 
         for rid in range(self.row_data_boundary):
-            no_merge_cell = True
+            merge_cells = 0
             for cid in range(self.col_header_boundary, self.max_cols):
-                if self.type_table[rid][cid].startswith("merge_"):
-                    no_merge_cell = False
-                    break
-            if no_merge_cell:
+                cell_type = self.type_table[rid][cid]
+                if cell_type.startswith("merge_"):
+                    rowspan = int(cell_type.split('_')[3])
+                    merge_cells = max(merge_cells, rowspan)
+            merge_cells -= 1
+            if merge_cells == -1:
                 if rid + 1 >= self.row_header_boundary:
                     self.row_header_boundary = rid + 1
                 self.row_data_boundary = self.row_header_boundary
                 break
+        self.row_header_boundary = self.row_data_boundary
         self.col_data_boundary = self.col_header_boundary
 
 
@@ -92,7 +97,7 @@ class TableStructure:
         elif cell_text.strip() in ['-', '—'] or f"{table_id}-{row_id}-{col_id}" in self.table_description:
             cell_type = 'data'
         elif rowspan > 1 or colspan > 1:
-            self.merge_counter += 1
+            self.merge_cells += 1
             cell_type = f'merge_{row_id}_{col_id}_{rowspan}_{colspan}'
         else:
             cell_type = ''
