@@ -9,6 +9,42 @@ from modules.process_tables import *
 class GroundTruthRetriever:
     def __init__(self, args):
         self.tabform = args.tabform
+        self.tabextract = args.tabextract
+
+    def get_tabform_table_gth(self, sample):
+        tables = sample['tables']
+        table_description = sample["table_description"]
+        table_trees = process_table_trees(tables, table_description)
+        
+        table_keys = sample['qa']['table_evidence']
+        table_gth_ids = {
+            i: {"rows": [], "cols": []}
+            for i in range(len(table_trees))
+        }
+        for item in table_keys:
+            ids = item.split('-')
+            tid = int(ids[0])
+            rid = int(ids[1])
+            cid = int(ids[2])
+            table_gth_ids[tid]["rows"].append(rid)
+            table_gth_ids[tid]["cols"].append(cid)
+
+        subtables = []
+        for tid, table_tree in enumerate(table_trees):
+            gth_rows = table_gth_ids[tid]["rows"]
+            gth_cols = table_gth_ids[tid]["cols"]
+            if len(gth_rows) == 0 and len(gth_cols) == 0:
+                subtables.append('')
+                continue
+            extract_rows = list(range(table_tree.row_header_boundary)) + gth_rows
+            extract_rows = list(set(extract_rows))
+            extract_cols = list(range(table_tree.col_header_boundary)) + gth_cols
+            extract_cols = list(set(extract_cols))
+            subtable = table_tree.extract_subtable(extract_rows, extract_cols)
+            subtables.append(subtable)
+            
+        return subtables
+
 
     def retrieve(self, sample):
         paragraphs = sample["paragraphs"]
@@ -16,6 +52,8 @@ class GroundTruthRetriever:
         table_cnt = 0
         for i in range(len(paragraphs)):
             if paragraphs[i] == f'## Table {table_cnt} ##':
+                if self.tabform:
+                    text_table_inds.append(i-1)
                 text_table_inds.append(i)
                 table_cnt += 1
         text_inds = sample['qa']['text_evidence']
@@ -25,7 +63,10 @@ class GroundTruthRetriever:
         update_texts = [paragraphs[ind] for ind in update_text_inds]
 
         if self.tabform:
-            update_tables = sample['tables']
+            if self.tabextract:
+                update_tables = self.get_tabform_table_gth(sample)
+            else:
+                update_tables = sample['tables']
             table_inds = None
         else:
             table_keys = sample['qa']['table_evidence']
