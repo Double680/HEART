@@ -22,9 +22,12 @@ class TableStructure:
         self.occupied_cells = set()
         self.content_table = [['' for _ in range(100)] for _ in range(100)]
         self.type_table = [['' for _ in range(100)] for _ in range(100)]
+        self.row_headers = {}
+        self.col_headers = {}
 
         self._init_table()
         self._init_header()
+        self._get_table_headers()
 
 
     def _init_header(self):
@@ -115,6 +118,79 @@ class TableStructure:
                 self.content_table[i][j] = cell_text
                 self.type_table[i][j] = cell_type
                 self.occupied_cells.add((i, j))
+
+
+    def _get_table_headers(self):
+        for row_id in range(self.row_header_boundary, self.max_rows):
+            row_name = []
+            for col_id in range(self.col_header_boundary):
+                row_name.append(self.content_table[row_id][col_id])
+            self.row_headers[row_id] = row_name
+
+        for col_id in range(self.col_header_boundary, self.max_cols):
+            col_name = []
+            for row_id in range(self.row_header_boundary):
+                col_name.append(self.content_table[row_id][col_id])
+            self.col_headers[col_id] = col_name
+
+
+    def extract_subtable(self, row_ids, col_ids):
+        row_ids = sorted(row_ids)
+        col_ids = sorted(col_ids)
+
+        subtable_content = [[
+            self.content_table[i][j] for j in col_ids
+        ] for i in row_ids]
+        subtable_type = [[
+            self.type_table[i][j] for j in col_ids
+        ] for i in row_ids]
+
+        row_num = len(row_ids)
+        col_num = len(col_ids)
+        subtable_soup = BeautifulSoup('', 'html.parser')
+        
+        table = subtable_soup.new_tag('table')
+        processed_cells = set()
+
+        for i in range(row_num):
+            tr = subtable_soup.new_tag('tr')
+
+            j = 0
+            while j < col_num:
+                if (i, j) in processed_cells:
+                    j += 1
+                    continue
+                content = subtable_content[i][j]
+                cell_type = subtable_type[i][j]
+                
+                td = subtable_soup.new_tag('td')
+                td.string = content
+
+                if cell_type.startswith('merge_'):
+                    rowspan = 1
+                    while i + rowspan < row_num and subtable_type[i + rowspan][j] == cell_type:
+                        rowspan += 1
+                    colspan = 1
+                    while j + colspan < col_num and subtable_type[i][j + colspan] == cell_type:
+                        colspan += 1
+
+                    for r in range(i, i+rowspan):
+                        for c in range(j, j+colspan):
+                            processed_cells.add((r, c))
+                    if rowspan > 1:
+                        td['rowspan'] = str(rowspan)
+                    if colspan > 1:
+                        td['colspan'] = str(colspan)
+                else:
+                    processed_cells.add((i, j))         
+
+                tr.append(td)
+                j += 1
+
+            table.append(tr)   
+
+        subtable_html = str(table)
+        return subtable_html
 
 
 def process_table_trees(tables, table_description):
