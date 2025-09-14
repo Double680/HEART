@@ -40,11 +40,11 @@ def reward_func_joint(completions, **kwargs):
     text_evids = [kwargs["qa"][id]["text_evidence"] for id in range(len(kwargs["qa"]))]
     table_evids = [kwargs["qa"][id]["table_evidence"] for id in range(len(kwargs["qa"]))]
     text_scores = [
-        retriever.eval(retriever.retrieve(question, text_doc), text_evid)[2] 
+        retriever.eval(retriever.retrieve(question, text_doc), text_evid)[REWARD_TYPE] 
         for question, text_doc, text_evid in zip(questions, text_docs, text_evids)
     ]
     table_scores = [
-        retriever.eval(retriever.retrieve(question, table_doc), table_evid)[2] 
+        retriever.eval(retriever.retrieve(question, table_doc), table_evid)[REWARD_TYPE] 
         for question, table_doc, table_evid in zip(questions, table_docs, table_evids)
     ]
     retrieve_rewards = [
@@ -63,7 +63,7 @@ def reward_func_text(completions, **kwargs):
     text_docs = kwargs["paragraphs"]
     text_evids = [kwargs["qa"][id]["text_evidence"] for id in range(len(kwargs["qa"]))]
     text_scores = [
-        retriever.eval(retriever.retrieve(question, text_doc), text_evid)[2] 
+        retriever.eval(retriever.retrieve(question, text_doc), text_evid)[REWARD_TYPE] 
         for question, text_doc, text_evid in zip(questions, text_docs, text_evids)
     ]
     retrieve_rewards = [reward_value(text_score)*2 for text_score in text_scores]
@@ -74,12 +74,14 @@ def reward_func_text(completions, **kwargs):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text'])
+    parser.add_argument('--ndcg', action='store_true')
     args = parser.parse_args()
 
+    REWARD_TYPE = 2 if args.ndcg else 1
     train_data_path = 'datasets/multihiertt/train_new.json'
     retriever_model_path = 'models/Qwen3-Embedding-0.6B'
     augment_model_path = 'models/Qwen3-1.7B'
-    save_model_path = f'models/HybTQA-{args.aug_type}'
+    save_model_path = f'models/HybTQA-{args.aug_type}-{REWARD_TYPE}'
 
     dataset = load_dataset('json', data_files=train_data_path)
 
