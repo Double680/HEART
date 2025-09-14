@@ -77,6 +77,8 @@ def init_model_config(args):
                 setting += f"_{args.query_aug}"
         if args.tabform:
             setting += "_tabform"
+            if args.tabextract:
+                setting += "_tabextract"
     save_root_setting = os.path.join(save_root_model, setting)
 
     ensure_dirs(save_root, save_root_model, save_root_setting)
