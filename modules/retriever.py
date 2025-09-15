@@ -36,7 +36,17 @@ class GroundTruthRetriever:
             if len(gth_rows) == 0 and len(gth_cols) == 0:
                 subtables.append('NONE')
                 continue
-            extract_rows = list(range(table_tree.row_header_boundary)) + gth_rows
+            
+            extend_gth_rows = []
+            for row in gth_rows:
+                row_id = row
+                while True:
+                    extend_gth_rows.append(row_id)
+                    if table_tree.row_parents[row_id] == row_id:
+                        break
+                    row_id = table_tree.row_parents[row_id]
+                    
+            extract_rows = list(range(table_tree.row_header_boundary)) + extend_gth_rows
             extract_rows = list(set(extract_rows))
             extract_cols = list(range(table_tree.col_header_boundary)) + gth_cols
             extract_cols = list(set(extract_cols))

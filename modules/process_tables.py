@@ -22,6 +22,7 @@ class TableStructure:
         self.type_table = [['' for _ in range(100)] for _ in range(100)]
         self.row_headers = {}
         self.col_headers = {}
+        self.row_parents = {}
 
         self._init_table()
         self._init_header()
@@ -119,11 +120,32 @@ class TableStructure:
 
 
     def _get_table_headers(self):
+        row_header_stack = []
         for row_id in range(self.row_header_boundary, self.max_rows):
             row_name = []
             for col_id in range(self.col_header_boundary):
                 row_name.append(self.content_table[row_id][col_id])
             self.row_headers[row_id] = row_name
+    
+            parent_flag = True
+            for col_id in range(self.col_header_boundary, self.max_cols):
+                if self.type_table[row_id][col_id] != "empty":
+                    parent_flag = False
+                    break
+            
+            if parent_flag:
+                if row_id > 0 and row_id - 1 in row_header_stack:
+                    row_header_stack.append(row_id)
+                else:
+                    row_header_stack = []
+                    row_header_stack.append(row_id)
+            if len(row_header_stack):
+                self.row_parents[row_id] = row_header_stack[-1]
+            else:
+                self.row_parents[row_id] = row_id
+        for row_id in range(self.row_header_boundary, self.max_rows):
+            if self.row_parents[row_id] != row_id:
+                self.row_headers[row_id] = self.row_headers[self.row_parents[row_id]] + self.row_headers[row_id]
 
         for col_id in range(self.col_header_boundary, self.max_cols):
             col_name = []
