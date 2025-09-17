@@ -74,10 +74,10 @@ def reward_func_text(completions, **kwargs):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text'])
-    parser.add_argument('--ndcg', action='store_true')
+    parser.add_argument('--recall', action='store_true')
     args = parser.parse_args()
 
-    REWARD_TYPE = 2 if args.ndcg else 1
+    REWARD_TYPE = 1 if args.recall else 2
     train_data_path = 'datasets/multihiertt/train_new.json'
     retriever_model_path = 'models/Qwen3-Embedding-0.6B'
     augment_model_path = 'models/Qwen3-1.7B'
@@ -93,7 +93,7 @@ if __name__ == "__main__":
 
     training_args = GRPOConfig(
         output_dir=save_model_path,
-        learning_rate=1e-5,
+        learning_rate=5e-6,
         num_train_epochs=2,
         per_device_train_batch_size=32,
         max_completion_length=256,
