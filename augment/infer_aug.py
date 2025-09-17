@@ -53,7 +53,7 @@ for item in tqdm(dataset):
     model_inputs = tokenizer([text], return_tensors="pt").to("cuda")
     generated_ids = model.generate(
         **model_inputs,
-        temperature=0.6,
+        temperature=0.7,
         top_p=0.95,
         max_new_tokens=256
     )
