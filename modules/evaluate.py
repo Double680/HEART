@@ -127,7 +127,7 @@ def evaluate(args):
 
     if args.dev:
         exact, f1 = 0.0, 0.0
-        for i in range(end-start):
+        for i in range(start, end):
             with open(os.path.join(save_root, f'{i}.json'), 'r') as file:
                 result = json.loads(file.read())
             pred, gold = result['prediction'], str(result['gold'])
@@ -144,7 +144,7 @@ def evaluate(args):
 
         if args.retrieve_type != "none":
             text_pre, text_rec, text_ndcg, table_pre, table_rec, table_ndcg = 0, 0, 0, 0, 0, 0
-            for i in range(end-start):
+            for i in range(start, end):
                 with open(os.path.join(save_root, f'{i}.json'), 'r') as file:
                     result = json.loads(file.read())
                 text_gth = list(dict.fromkeys(samples[i]['qa']['text_evidence']).keys())
