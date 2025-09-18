@@ -2,8 +2,6 @@ import os
 import json
 import torch
 import torch.nn as nn
-# from utils.table_header import *
-# from utils.subtable_generator import *
 from modules.process_tables import *
 
 class GroundTruthRetriever:
@@ -128,39 +126,6 @@ class DensePassageRetriever:
 
     def retrieve_table_evidence(self, sample, question_emb, table_st_embs):
         tables = sample['tables']
-        # if self.tabheader:
-        #     table_doc = get_table_docs(sample['table_headers'])
-        #     col_sites, row_sites = get_site_lists(table_doc)
-        #     col_sim_scores = self.sim_func(question_emb, table_col_embs)
-        #     col_indices = torch.topk(col_sim_scores, k=min(self.top_k, col_sim_scores.size(-1))).indices.squeeze(0)
-        #     col_indices = [col_sites[ind] for ind in col_indices.tolist()]
-        #     row_sim_scores = self.sim_func(question_emb, table_row_embs)
-        #     row_indices = torch.topk(row_sim_scores, k=min(self.top_k, row_sim_scores.size(-1))).indices.squeeze(0)
-        #     row_indices = [row_sites[ind] for ind in row_indices.tolist()]
-        #     retrieved_table_inds = [col_indices, row_indices]
-        #     update_tables = []
-        #     col_indices_dict = {i: [] for i in range(len(tables))}
-        #     for i, _, col_site in col_indices:
-        #         col_indices_dict[i].extend(col_site)
-        #     row_indices_dict = {i: [] for i in range(len(tables))}
-        #     for i, _, row_site in row_indices:
-        #         row_indices_dict[i].extend(row_site)
-        #     for i in range(len(tables)):
-        #         table_html = tables[i]
-        #         if i not in sample['table_headers_max_ids']:
-        #             update_tables.append('None')
-        #             continue
-        #         row_header_length = sample['table_headers_max_ids'][i]['row']
-        #         row_site_base = [i for i in range(row_header_length)]
-        #         row_site_retreival = row_indices_dict[i]
-        #         row_sites_final = sorted(list(set(row_site_base + row_site_retreival)))
-        #         col_header_length = sample['table_headers_max_ids'][i]['col']
-        #         col_site_base = [i for i in range(col_header_length)]   
-        #         col_site_retreival = col_indices_dict[i]
-        #         col_sites_final = sorted(list(set(col_site_base + col_site_retreival)))
-        #         table_html = extract_subtable(table_html, row_sites_final, col_sites_final)
-        #         update_tables.append(table_html)
-        # else:
         table_desc = sample['table_description']
         table_desc_st = [(int(key.split('-')[0]), table_desc[key]) for key in table_desc]
         table_scores = self.sim_func(question_emb, table_st_embs)
@@ -178,24 +143,8 @@ class DensePassageRetriever:
         tables = sample['tables']
         table_description = sample["table_description"]
         table_trees = process_table_trees(tables, table_description)
-
+        # TBD
         
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def retrieve(self, sample):
         uid = sample['uid']
@@ -203,13 +152,7 @@ class DensePassageRetriever:
         with open(doc_emb_path, "r") as file:
             emb_dict = json.loads(file.read())
         text_st_embs = torch.tensor(emb_dict["text_embs"]).to(self.device)
-        # if self.tabheader:
-        #     table_header_emb_path = os.path.join(self.path_root, uid, "table_header_embs.json")
-        #     with open(table_header_emb_path, "r") as file:
-        #         header_emb_dict = json.loads(file.read())
-        #     table_col_embs = torch.tensor(header_emb_dict["table_col_embs"]).to(self.device)
-        #     table_row_embs = torch.tensor(header_emb_dict["table_row_embs"]).to(self.device)
-        # else:
+
         table_st_embs = torch.tensor(emb_dict["table_embs"]).to(self.device)
         if self.aug != 'none':
             query_emb_path = os.path.join(self.path_root, uid, f"{self.aug}_query_embs.json")
@@ -223,7 +166,7 @@ class DensePassageRetriever:
         update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, question_emb, text_st_embs)
         if self.tabform:
             if self.tabextract:
-                update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, question_emb)
+                update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample)
             else:
                 update_tables = sample['tables']
                 retrieved_table_inds = None
