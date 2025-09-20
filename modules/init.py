@@ -30,6 +30,7 @@ def init_args():
     parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
     parser.add_argument("--tabform", action="store_true")  # only for dpr or gth
     parser.add_argument("--tabextract", action="store_true")  # only for dpr and tabform
+    parser.add_argument("--tabextract_aug", default="none", choices=["none", "grpo_aug"])
 
     parser.add_argument("--eval", action="store_true")
 

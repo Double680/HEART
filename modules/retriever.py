@@ -101,6 +101,7 @@ class DensePassageRetriever:
         self.top_k = args.top_k
         self.tabform = args.tabform
         self.tabextract = args.tabextract
+        self.tabextract_aug = args.tabextract_aug
         self.sim_func = nn.CosineSimilarity(dim=-1)
         self.device = "cuda"       
 
@@ -139,11 +140,30 @@ class DensePassageRetriever:
 
         return update_tables, retrieved_table_inds
 
-    def retrieve_tabform_table_evidence(self, sample, question_emb):
+    def retrieve_tabform_table_evidence(self, sample, tabextract_path):
         tables = sample['tables']
         table_description = sample["table_description"]
         table_trees = process_table_trees(tables, table_description)
-        # TBD
+
+        result_subtables = []
+        if self.tabextract_aug == 'none':
+            with open(tabextract_path, "r") as file:
+                subtables = json.loads(file.read())
+            for i in range(len(tables)):
+                if i in subtables:
+                    row_ids = subtables[i]["rid"]
+                    col_ids = subtables[i]["cid"]
+                    try:
+                        subtable = table_trees[i].extract_subtable(row_ids, col_ids)
+                    except Exception:
+                        subtable = 'NONE'
+                else:
+                    subtable = 'NONE'
+                result_subtables.append(subtable)
+        else:
+            pass
+            # TBD
+        return result_subtables, None
         
 
     def retrieve(self, sample):
@@ -166,7 +186,8 @@ class DensePassageRetriever:
         update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, question_emb, text_st_embs)
         if self.tabform:
             if self.tabextract:
-                update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample)
+                tabextract_path = os.path.join(self.path_root, uid, "table_extract.json")
+                update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, tabextract_path)
             else:
                 update_tables = sample['tables']
                 retrieved_table_inds = None

@@ -20,7 +20,6 @@ else:
     
 data_root = f"./datasets/multihiertt"
 src_file = f"{data_root}/{dataset_type}.json"
-tgt_file = f"{data_root}/{dataset_type}_extract.jsonl"
 
 model = AutoModelForCausalLM.from_pretrained(
     model_path,
@@ -74,9 +73,8 @@ for item in tqdm(dataset):
     content = tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
     subtables = content.split("<answer>")[-1].split("</answer>")[0].strip('\n')
     subtable_item = {
-        "uid": item["uid"],
         "subtables": subtables
     }
-    with open(tgt_file, "a") as file:
+    with open(f"./stored/{item["uid"]}/table_extract.json", "w") as file:
         file.write(json.dumps(subtable_item))
         file.write('\n')
