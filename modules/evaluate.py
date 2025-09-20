@@ -118,6 +118,23 @@ def get_span_selection_metrics(predicted, gold):
     f1 = round(f1, 2)
     return exact_match, f1
 
+def recall_eval(pred, gth):
+    recall_cnt = 0
+    total_cnt = 0
+    for item in gth:
+        tid, rid, cid = item.split('-')
+        tid = int(tid)
+        rid = int(rid)
+        cid = int(cid)
+        if tid in pred:
+            tid_pred = pred[tid]
+            if rid in tid_pred["rid"] and cid in tid_pred["cid"]:
+                recall_cnt += 1
+        total_cnt += 1
+
+    recall_score = recall_cnt / total_cnt if total_cnt else 1.0
+
+    return recall_score
 
 def evaluate(args):
     start = args.start
@@ -172,27 +189,6 @@ def evaluate(args):
                 except ZeroDivisionError:
                     text_ndcg += 1
 
-                # if args.tabheader:
-                #     table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
-                #     table_pred = result['retrieved_table_ids']
-                #     cleaned_col_indices, cleaned_row_indices = [], []
-                #     for item in table_pred[0]:
-                #         for site in item[2]:
-                #             cleaned_col_indices.append((item[0], item[1], site))
-                #     for item in table_pred[1]:
-                #         for site in item[2]:
-                #             cleaned_row_indices.append((item[0], item[1], site))
-                #     hit = 0
-                #     for item in table_gth:
-                #         id, row, col = item.split('-')
-                #         id, row, col = int(id), int(row), int(col)
-                #         if (id, 'row', row) in cleaned_row_indices and (id, 'col', col) in cleaned_col_indices:
-                #             hit += 1
-                #     try:
-                #         table_rec += hit / len(table_gth)
-                #     except ZeroDivisionError:
-                #         table_rec += 1
-                # else:
                 if not args.tabform:
                     table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
                     table_pred = list(dict.fromkeys(result['retrieved_table_ids']).keys())
@@ -221,7 +217,18 @@ def evaluate(args):
                         table_ndcg += table_dcg / table_idcg
                     except ZeroDivisionError:
                         table_ndcg += 1
-                    
+                elif args.tabextract and args.tabextract_type == "raw_ext":
+                    uid = result["uid"]
+                    table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
+                    with open(f"{args.stored_embs_path}/{uid}/table_extract.json", "r") as file:
+                        try:
+                            table_pred = json.loads(file.read())
+                            table_pred = eval(table_pred["subtables"])
+                        except Exception:
+                            table_pred = {}
+                    recall_score = recall_eval(table_pred, table_gth)
+                    table_rec += recall_score
+
             text_pre = text_pre / (end-start)
             text_rec = text_rec / (end-start)
             text_ndcg = text_ndcg / (end-start)
@@ -236,6 +243,9 @@ def evaluate(args):
                 table_rec = table_rec / (end-start)
                 table_ndcg = table_ndcg / (end-start)
                 print(f'Retrieved Tables Presicion: {table_pre*100:.2f}, Recall: {table_rec*100:.2f}, NDCG: {table_ndcg*100:.2f}')
+            elif args.tabextract and args.tabextract_type == "raw_ext":
+                table_rec = table_rec / (end-start)
+                print(f'Retrieved Tables Recall: {table_rec*100:.2f}')
 
     else:
         results = []

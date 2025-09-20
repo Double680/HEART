@@ -101,7 +101,7 @@ class DensePassageRetriever:
         self.top_k = args.top_k
         self.tabform = args.tabform
         self.tabextract = args.tabextract
-        self.tabextract_aug = args.tabextract_aug
+        self.tabextract_type = args.tabextract_type
         self.sim_func = nn.CosineSimilarity(dim=-1)
         self.device = "cuda"       
 
@@ -146,9 +146,13 @@ class DensePassageRetriever:
         table_trees = process_table_trees(tables, table_description)
 
         result_subtables = []
-        if self.tabextract_aug == 'none':
+        if self.tabextract_type == 'raw_ext':
             with open(tabextract_path, "r") as file:
-                subtables = json.loads(file.read())
+                try:
+                    subtables = json.loads(file.read())["subtables"]
+                    subtables = eval(subtables)
+                except Exception:
+                    subtables = {}
             for i in range(len(tables)):
                 if i in subtables:
                     row_ids = subtables[i]["rid"]
