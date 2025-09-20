@@ -35,7 +35,9 @@ with open(src_file, "r") as file:
     dataset = json.loads(file.read())
 
 def make_conversation(example):
-    template = "Modify the given question precisely by adding more details within <query> </query> tags. \nQuestion: <QUESTION> "
+    with open("augment/aug_template.txt", "r") as file:
+        template = file.read()
+
     messages = [{
         "role": "user", 
         "content": template.replace("<QUESTION>", example["qa"]["question"])

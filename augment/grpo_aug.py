@@ -9,7 +9,9 @@ import torch
 import argparse
 
 def make_conversation(example):
-    template = "Modify the given question precisely by adding more details within <query> </query> tags. \nQuestion: <QUESTION> /no_think"
+    with open("augment/aug_template.txt", "r") as file:
+        template = file.read()
+
     prompt = {
         "prompt": [{
             "role": "user", 
