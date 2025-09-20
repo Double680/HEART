@@ -1,5 +1,4 @@
-Given a question and several hierarchical tables, find the relevant subtables that provide useful information to answer the question. 
-You should ensure that the extracted subtables contain equal clues that are useful to answer the question.   
+Given a question and several hierarchical tables, extract useful rows and columns for each table to simplify the context, which provides useful information to answer the question.  
 The output should be in JSON format within <answer> </answer> tags:
 <answer>
 {<TABLE_ID_0>: {"rid": [<ROW_ID_0>, <ROW_ID_1>, ...], "cid": [<COLUMN_ID_0>, <COLUMN_ID_1>, ...}, <TABLE_ID_1>: ...}
@@ -11,4 +10,3 @@ For example, the following output are legal:
 Find the task-relevant subtables for the below question from these tables: 
 Question: <QUESTION> 
 Tables: <TABLES>
-/no_think

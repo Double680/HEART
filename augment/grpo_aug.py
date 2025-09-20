@@ -15,7 +15,7 @@ def make_conversation(example):
     prompt = {
         "prompt": [{
             "role": "user", 
-            "content": template.replace("<QUESTION>", example["qa"]["question"])
+            "content": template.replace("<QUESTION>", example["qa"]["question"]) + '/no_think'
         }]
     }
     return prompt

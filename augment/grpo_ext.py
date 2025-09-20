@@ -14,7 +14,7 @@ def make_conversation(example):
     content = template.replace("<QUESTION>", example["qa"]["question"])
     tabular_content = ""
     tid = 0
-    for i in range(example["paragraphs"]):
+    for i in range(len(example["paragraphs"])):
         if example["paragraphs"][i] == f"## Table {tid} ##":
             tabular_content += f"Table {tid} - "
             tabular_content += example["paragraphs"][i-1]
@@ -25,7 +25,7 @@ def make_conversation(example):
     prompt = {
         "prompt": [{
             "role": "user", 
-            "content": content
+            "content": content + '/no_think'
         }]
     }
     return prompt
@@ -47,6 +47,13 @@ def format_reward(answer):
 
     return reward
 
+def get_evid_pred(answer):
+    try:
+        output = json.loads(answer)
+    except Exception:
+        output = {}
+    return output
+
 def recall_eval(pred, gth):
     recall_cnt = 0
     total_cnt = 0
@@ -62,13 +69,14 @@ def recall_eval(pred, gth):
         total_cnt += 1
 
     recall_score = recall_cnt / total_cnt if total_cnt else 1.0
+
     return recall_score
 
 def reward_func(completions, **kwargs):
     answers = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
     format_rewards = [format_reward(answer) for answer in answers]
     table_evid_pred = [
-        json.loads(answer.split("<answer>")[-1].split("</answer>")[0].strip('\n')) for answer in answers
+        get_evid_pred(answer.split("<answer>")[-1].split("</answer>")[0].strip('\n')) for answer in answers
     ]
     table_evid_gth = [list(set(kwargs["qa"][id]["table_evidence"])) for id in range(len(kwargs["qa"]))]
 

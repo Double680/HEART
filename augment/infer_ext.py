@@ -9,7 +9,6 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dev', action='store_true')
-parser.add_argument('--name', type=str)
 parser.add_argument('--path', type=str, default='models/Qwen3-1.7B')
 args = parser.parse_args()
 
@@ -41,7 +40,7 @@ def make_conversation(example):
     content = template.replace("<QUESTION>", example["qa"]["question"])
     tabular_content = ""
     tid = 0
-    for i in range(example["paragraphs"]):
+    for i in range(len(example["paragraphs"])):
         if example["paragraphs"][i] == f"## Table {tid} ##":
             tabular_content += f"Table {tid} - "
             tabular_content += example["paragraphs"][i-1]
@@ -49,13 +48,12 @@ def make_conversation(example):
             tid += 1
     content = content.replace("<TABLES>", tabular_content)
 
-    prompt = {
-        "prompt": [{
-            "role": "user", 
-            "content": content
-        }]
-    }
-    return prompt
+    messages = [{
+        "role": "user", 
+        "content": content
+    }]
+
+    return messages
 
 for item in tqdm(dataset):
     messages = make_conversation(item)
@@ -74,7 +72,7 @@ for item in tqdm(dataset):
     )
     output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
     content = tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
-    subtables = content.split("<answer>")[-1].split("</answer>")[0]
+    subtables = content.split("<answer>")[-1].split("</answer>")[0].strip('\n')
     subtable_item = {
         "uid": item["uid"],
         "subtables": subtables

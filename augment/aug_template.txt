@@ -1,2 +1,2 @@
 Modify the given question precisely by adding more details within <query> </query> tags. 
-Question: <QUESTION> /no_think
+Question: <QUESTION> 
