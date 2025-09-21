@@ -10,7 +10,9 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dev', action='store_true')
+parser.add_argument('--name', type=str)
 parser.add_argument('--path', type=str, default='models/Qwen3-1.7B')
+parser.add_argument('--id', type=int)
 args = parser.parse_args()
 
 model_path = args.path
@@ -73,7 +75,7 @@ for item in tqdm(dataset):
         **model_inputs,
         temperature=0.7,
         top_p=0.95,
-        max_new_tokens=256
+        max_new_tokens=384
     )
     output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
     content = tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
@@ -81,8 +83,8 @@ for item in tqdm(dataset):
     subtable_item = {
         "subtables": subtables
     }
-
-    ensure_dirs("./stored", f"./stored/{item["uid"]}")
+    ensure_dirs(f"./stored/{item["uid"]}")
     with open(f"./stored/{item["uid"]}/table_extract.json", "w") as file:
         file.write(json.dumps(subtable_item))
         file.write('\n')
+    cnt += 1

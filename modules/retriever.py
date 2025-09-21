@@ -146,7 +146,7 @@ class DensePassageRetriever:
         table_trees = process_table_trees(tables, table_description)
 
         result_subtables = []
-        if self.tabextract_type == 'raw_ext':
+        if self.tabextract_type != 'none':
             with open(tabextract_path, "r") as file:
                 try:
                     subtables = json.loads(file.read())["subtables"]
@@ -167,7 +167,7 @@ class DensePassageRetriever:
         else:
             pass
             # TBD
-        return result_subtables, None
+        return result_subtables, subtables
         
 
     def retrieve(self, sample):
@@ -177,7 +177,6 @@ class DensePassageRetriever:
             emb_dict = json.loads(file.read())
         text_st_embs = torch.tensor(emb_dict["text_embs"]).to(self.device)
 
-        table_st_embs = torch.tensor(emb_dict["table_embs"]).to(self.device)
         if self.aug != 'none':
             query_emb_path = os.path.join(self.path_root, uid, f"{self.aug}_query_embs.json")
         else:
@@ -185,17 +184,18 @@ class DensePassageRetriever:
         with open(query_emb_path, "r") as file:
             query_emb_dict = json.loads(file.read())
             question_emb = torch.tensor(query_emb_dict["query_embs"]).to(self.device)
-        
-        # retrieve
+
         update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, question_emb, text_st_embs)
+        
         if self.tabform:
             if self.tabextract:
-                tabextract_path = os.path.join(self.path_root, uid, "table_extract.json")
+                tabextract_path = os.path.join(self.path_root, uid, f"table_{self.tabextract_type}.json")
                 update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, tabextract_path)
             else:
                 update_tables = sample['tables']
                 retrieved_table_inds = None
         else:
+            table_st_embs = torch.tensor(emb_dict["table_embs"]).to(self.device)
             update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, question_emb, table_st_embs)
 
         return update_texts, update_tables, retrieved_text_inds, retrieved_table_inds

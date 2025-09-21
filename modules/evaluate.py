@@ -123,7 +123,6 @@ def recall_eval(pred, gth):
     total_cnt = 0
     for item in gth:
         tid, rid, cid = item.split('-')
-        tid = int(tid)
         rid = int(rid)
         cid = int(cid)
         if tid in pred:
@@ -217,15 +216,9 @@ def evaluate(args):
                         table_ndcg += table_dcg / table_idcg
                     except ZeroDivisionError:
                         table_ndcg += 1
-                elif args.tabextract and args.tabextract_type == "raw_ext":
-                    uid = result["uid"]
+                elif args.tabextract and args.tabextract_type != "none":
                     table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
-                    with open(f"{args.stored_embs_path}/{uid}/table_extract.json", "r") as file:
-                        try:
-                            table_pred = json.loads(file.read())
-                            table_pred = eval(table_pred["subtables"])
-                        except Exception:
-                            table_pred = {}
+                    table_pred = result["retrieved_table_ids"]
                     recall_score = recall_eval(table_pred, table_gth)
                     table_rec += recall_score
 
@@ -243,7 +236,7 @@ def evaluate(args):
                 table_rec = table_rec / (end-start)
                 table_ndcg = table_ndcg / (end-start)
                 print(f'Retrieved Tables Presicion: {table_pre*100:.2f}, Recall: {table_rec*100:.2f}, NDCG: {table_ndcg*100:.2f}')
-            elif args.tabextract and args.tabextract_type == "raw_ext":
+            elif args.tabextract and args.tabextract_type != "none":
                 table_rec = table_rec / (end-start)
                 print(f'Retrieved Tables Recall: {table_rec*100:.2f}')
 
