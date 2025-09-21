@@ -1,6 +1,7 @@
 import sys
 sys.path.append('./')
 
+import os
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 import torch
@@ -54,6 +55,11 @@ def make_conversation(example):
 
     return messages
 
+def ensure_dirs(*dirs):
+    for dir in dirs:
+        if not os.path.exists(dir):
+            os.mkdir(dir)
+
 for item in tqdm(dataset):
     messages = make_conversation(item)
     text = tokenizer.apply_chat_template(
@@ -75,6 +81,8 @@ for item in tqdm(dataset):
     subtable_item = {
         "subtables": subtables
     }
+
+    ensure_dirs("./stored", f"./stored/{item["uid"]}")
     with open(f"./stored/{item["uid"]}/table_extract.json", "w") as file:
         file.write(json.dumps(subtable_item))
         file.write('\n')
