@@ -1,11 +1,12 @@
-Given a question and several hierarchical tables, extract useful rows and columns for each table to simplify the context, which provides useful information to answer the question.  
+Given a question and several hierarchical tables, extract useful rows and columns for each table to simplify the context, which provides useful information to answer the question. 
+The rows and columns should be precise that all useful rows and columns should be preserved, while additional redundant rows or columns should not be involved. 
 The output should be in JSON format within <answer> </answer> tags:
 <answer>
-{<TABLE_ID_0>: {"rid": [<ROW_ID_0>, <ROW_ID_1>, ...], "cid": [<COLUMN_ID_0>, <COLUMN_ID_1>, ...}, <TABLE_ID_1>: ...}
+{"<TABLE_ID_0>": {"rid": [<ROW_ID_0>, <ROW_ID_1>, ...], "cid": [<COLUMN_ID_0>, <COLUMN_ID_1>, ...]}, "<TABLE_ID_1>": ...}
 </answer>
 For example, the following output are legal:
 <answer>
-{0: {"rid": [0, 1, 2, 5], "cid": [0, 1, 4, 7]}, 1: {"rid": [0, 1, 3], "cid": [0, 1, 2, 8]}}
+{"0": {"rid": [0, 1, 2, 5], "cid": [0, 1, 4, 7]}, "1": {"rid": [0, 1, 3], "cid": [0, 1, 2, 8]}, "2": {"rid": [], "cid": []}}
 </answer>
 Find the task-relevant subtables for the below question from these tables: 
 Question: <QUESTION> 
