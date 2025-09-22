@@ -84,7 +84,7 @@ for item in tqdm(dataset):
         "subtables": subtables
     }
     ensure_dirs(f"./stored/{item["uid"]}")
-    with open(f"./stored/{item["uid"]}/table_extract.json", "w") as file:
+    with open(f"./stored/{item["uid"]}/table_{args.name}.json", "w") as file:
         file.write(json.dumps(subtable_item))
         file.write('\n')
     cnt += 1
