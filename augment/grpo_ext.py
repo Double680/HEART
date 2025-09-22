@@ -59,7 +59,6 @@ def recall_eval(pred, gth):
     total_cnt = 0
     for item in gth:
         tid, rid, cid = item.split('-')
-        tid = int(tid)
         rid = int(rid)
         cid = int(cid)
         if tid in pred:
@@ -72,6 +71,43 @@ def recall_eval(pred, gth):
 
     return recall_score
 
+def IoU_eval(pred, gth):
+    gth_dic = {}
+    for item in gth: #"0-2-8"
+        tid, rid, cid = item.split('-')
+        rid = int(rid)
+        cid = int(cid)
+        if tid not in gth_dic:
+            gth_dic[tid] = {"rid": [], "cid": []}
+        if rid not in gth_dic[tid]["rid"]:
+            gth_dic[tid]["rid"].append(rid)
+        if cid not in gth_dic[tid]["cid"]:
+            gth_dic[tid]["cid"].append(cid)
+    
+    row_joint, row_union = 0, 0
+    col_joint, col_union = 0, 0
+
+    for key in pred.keys():
+        if key not in gth_dic:
+            gth_dic[key] = {"rid": [], "cid": []}
+        
+        pred_row_set = set(pred[key]["rid"])
+        gth_row_set = set(gth_dic[key]["rid"])
+        row_joint += len(pred_row_set.intersection(gth_row_set))
+        row_union += len(pred_row_set.union(gth_row_set))
+
+        pred_col_set = set(pred[key]["cid"])
+        gth_col_set = set(gth_dic[key]["cid"])
+        col_joint += len(pred_col_set.intersection(gth_col_set))
+        col_union += len(pred_col_set.union(gth_col_set))
+        
+    row_score = row_joint / row_union if row_union else 1.0
+    col_score = col_joint / col_union if col_union else 1.0
+    
+    IoU_score = (row_score + col_score) / 2
+    return IoU_score
+
+
 def reward_func(completions, **kwargs):
     answers = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
     format_rewards = [format_reward(answer) for answer in answers]
@@ -81,7 +117,7 @@ def reward_func(completions, **kwargs):
     table_evid_gth = [list(set(kwargs["qa"][id]["table_evidence"])) for id in range(len(kwargs["qa"]))]
 
     table_scores = [
-        recall_eval(pred, gth) for pred, gth in zip(table_evid_pred, table_evid_gth)
+        IoU_eval(pred, gth) for pred, gth in zip(table_evid_pred, table_evid_gth)
     ]
 
     extract_rewards = [reward_value(table_score) for table_score in table_scores]
