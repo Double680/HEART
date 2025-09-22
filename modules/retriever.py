@@ -149,14 +149,14 @@ class DensePassageRetriever:
         if self.tabextract_type != 'none':
             with open(tabextract_path, "r") as file:
                 try:
-                    subtables = json.loads(file.read())["subtables"]
-                    subtables = eval(subtables)
+                    subtables_txt = json.loads(file.read())
+                    subtables = json.loads(subtables_txt["subtables"])
                 except Exception:
                     subtables = {}
             for i in range(len(tables)):
-                if i in subtables:
-                    row_ids = subtables[i]["rid"]
-                    col_ids = subtables[i]["cid"]
+                if str(i) in subtables:
+                    row_ids = subtables[str(i)]["rid"]
+                    col_ids = subtables[str(i)]["cid"]
                     try:
                         subtable = table_trees[i].extract_subtable(row_ids, col_ids)
                     except Exception:

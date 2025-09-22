@@ -90,8 +90,8 @@ def reward_func(completions, **kwargs):
 
 if __name__ == "__main__":
     train_data_path = 'datasets/multihiertt/train_new.json'
-    extract_model_path = 'models/Qwen3-1.7B'
-    save_model_path = f'models/HybTQA-table-extract'
+    extract_model_path = 'models/Qwen3-4B'
+    save_model_path = f'models/HybTQA-tabextract'
 
     dataset = load_dataset('json', data_files=train_data_path)
 
@@ -104,7 +104,7 @@ if __name__ == "__main__":
         learning_rate=5e-6,
         num_train_epochs=2,
         per_device_train_batch_size=32,
-        max_completion_length=256,
+        max_completion_length=384,
         num_generations=8,
         max_prompt_length=1536,
         logging_steps=5,
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     )
 
     model = AutoModelForCausalLM.from_pretrained(
-        "models/Qwen3-1.7B",
+        extract_model_path,
         torch_dtype=torch.bfloat16,
         device_map="auto",
         trust_remote_code=True
