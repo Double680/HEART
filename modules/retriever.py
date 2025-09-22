@@ -146,27 +146,38 @@ class DensePassageRetriever:
         table_trees = process_table_trees(tables, table_description)
 
         result_subtables = []
-        if self.tabextract_type != 'none':
-            with open(tabextract_path, "r") as file:
+
+        with open(tabextract_path, "r") as file:
+            try:
+                subtables_txt = json.loads(file.read())
+                subtables_dic = json.loads(subtables_txt["subtables"])
+            except Exception:
+                subtables_dic = {}
+
+            subtables = {}
+            for key in subtables_dic.keys():
                 try:
-                    subtables_txt = json.loads(file.read())
-                    subtables = json.loads(subtables_txt["subtables"])
+                    assert isinstance(key, str)
+                    assert isinstance(int(key), int)
+                    assert "rid" in subtables_dic[key].keys()
+                    assert "cid" in subtables_dic[key].keys()
+                    assert isinstance(subtables_dic[key], list) and all(isinstance(item, int) for item in subtables_dic[key])
+                    subtables[key] = subtables_dic[key]
                 except Exception:
-                    subtables = {}
-            for i in range(len(tables)):
-                if str(i) in subtables:
-                    row_ids = subtables[str(i)]["rid"]
-                    col_ids = subtables[str(i)]["cid"]
-                    try:
-                        subtable = table_trees[i].extract_subtable(row_ids, col_ids)
-                    except Exception:
-                        subtable = 'NONE'
-                else:
+                    continue
+
+        for i in range(len(tables)):
+            if str(i) in subtables:
+                row_ids = subtables[str(i)]["rid"]
+                col_ids = subtables[str(i)]["cid"]
+                try:
+                    subtable = table_trees[i].extract_subtable(row_ids, col_ids)
+                except Exception:
                     subtable = 'NONE'
-                result_subtables.append(subtable)
-        else:
-            pass
-            # TBD
+            else:
+                subtable = 'NONE'
+            result_subtables.append(subtable)
+
         return result_subtables, subtables
         
 

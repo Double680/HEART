@@ -52,7 +52,20 @@ def get_evid_pred(answer):
         output = json.loads(answer)
     except Exception:
         output = {}
-    return output
+
+    pred = {}
+    for key in output.keys():
+        try:
+            assert isinstance(key, str)
+            assert isinstance(int(key), int)
+            assert "rid" in output[key].keys()
+            assert "cid" in output[key].keys()
+            assert isinstance(output[key], list) and all(isinstance(item, int) for item in output[key])
+            pred[key] = output[key]
+        except Exception:
+            continue
+
+    return pred
 
 def recall_eval(pred, gth):
     recall_cnt = 0
@@ -90,7 +103,6 @@ def IoU_eval(pred, gth):
     for key in pred.keys():
         if key not in gth_dic:
             gth_dic[key] = {"rid": [], "cid": []}
-        
         pred_row_set = set(pred[key]["rid"])
         gth_row_set = set(gth_dic[key]["rid"])
         row_joint += len(pred_row_set.intersection(gth_row_set))
