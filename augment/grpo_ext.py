@@ -1,6 +1,7 @@
 import sys
 sys.path.append('./')
 
+from accelerate import Accelerator
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer
 from transformers import AutoModelForCausalLM
@@ -141,6 +142,8 @@ if __name__ == "__main__":
     extract_model_path = 'models/Qwen3-4B'
     save_model_path = f'models/HybTQA-tabextract'
 
+    accelerator = Accelerator()
+
     dataset = load_dataset('json', data_files=train_data_path)
 
     dataset = dataset.map(make_conversation)
@@ -163,7 +166,7 @@ if __name__ == "__main__":
     model = AutoModelForCausalLM.from_pretrained(
         extract_model_path,
         torch_dtype=torch.bfloat16,
-        device_map="auto",
+        # device_map="auto",
         trust_remote_code=True
     )
 
