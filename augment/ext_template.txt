@@ -1,4 +1,8 @@
-Given a question and several hierarchical tables in HTML format, point out number indices of useful rows and columns for each table to simplify the context for question answering. 
+Given a question and several hierarchical tables with their captions and headers:
+Question: <QUESTION> 
+Tables: 
+<TABLES>
+Point out IDs of useful rows and columns for each table to simplify the context for question answering. 
 - The rows and columns should be precise that all useful rows and columns should be preserved, while additional redundant rows or columns should not be involved. 
 - The output should be in JSON format within <answer> </answer> tags:
 <answer>
@@ -6,8 +10,5 @@ Given a question and several hierarchical tables in HTML format, point out numbe
 </answer>
 where all TABLE_ID, ROW_ID and COLUMN_ID should be integer IDs (start from 0). For example, the following output are legal:
 <answer>
-{"0": {"rid": [0, 1, 2, 5], "cid": [0, 1, 4, 7]}, "1": {"rid": [0, 1, 3], "cid": [0, 1, 2, 8]}, "2": {"rid": [], "cid": []}}
-</answer>
-Find the task-relevant subtable row and column indices for the below question and tables: 
-Question: <QUESTION> 
-Tables: <TABLES>
+{"0": {"rid": [1, 2, 5], "cid": [0, 4, 7]}, "2": {"rid": [0, 3], "cid": [1, 2, 8]}}
+</answer> 

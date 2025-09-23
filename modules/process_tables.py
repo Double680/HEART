@@ -211,6 +211,20 @@ class TableStructure:
 
         subtable_html = str(table)
         return subtable_html
+    
+
+    def list_row_headers(self):
+        content = ""
+        for key in self.row_headers:
+            content = content + '- ' + key + ":" + ' -> '.join(self.row_headers[key]) + '\n'
+        return content
+
+
+    def list_col_headers(self):
+        content = ""
+        for key in self.col_headers:
+            content = content + '- ' + key + ":" + ' -> '.join(self.col_headers[key]) + '\n'
+        return content
 
 
 def process_table_trees(tables, table_description):

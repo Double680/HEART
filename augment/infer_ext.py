@@ -8,6 +8,8 @@ import torch
 import json
 import argparse
 
+from modules.process_tables import TableStructure
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--dev', action='store_true')
 parser.add_argument('--name', type=str)
@@ -43,9 +45,15 @@ def make_conversation(example):
     tid = 0
     for i in range(len(example["paragraphs"])):
         if example["paragraphs"][i] == f"## Table {tid} ##":
-            tabular_content += f"Table {tid} - "
-            tabular_content += example["paragraphs"][i-1]
-            tabular_content += example["tables"][tid]
+            tabular_content += f"## Table ID: {tid} ##\n"
+            tabular_content += "Caption: " + example["paragraphs"][i-1]
+
+            table_tree = TableStructure(example["tables"][tid], tid, example["table_description"])
+            tabular_content += "Column Headers (ID, Name): \n"
+            tabular_content += table_tree.list_col_headers()
+            tabular_content += "Row Headers (ID, Name): \n"
+            tabular_content += table_tree.list_row_headers()
+
             tid += 1
     content = content.replace("<TABLES>", tabular_content)
 
