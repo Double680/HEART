@@ -161,7 +161,8 @@ class DensePassageRetriever:
                     assert isinstance(int(key), int)
                     assert "rid" in subtables_dic[key].keys()
                     assert "cid" in subtables_dic[key].keys()
-                    assert isinstance(subtables_dic[key], list) and all(isinstance(item, int) for item in subtables_dic[key])
+                    assert isinstance(subtables_dic[key]["rid"], list) and all(isinstance(item, int) for item in subtables_dic[key]["rid"])
+                    assert isinstance(subtables_dic[key]["cid"], list) and all(isinstance(item, int) for item in subtables_dic[key]["cid"])
                     subtables[key] = subtables_dic[key]
                 except Exception:
                     continue
