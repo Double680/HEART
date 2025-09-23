@@ -102,6 +102,7 @@ class DensePassageRetriever:
         self.tabform = args.tabform
         self.tabextract = args.tabextract
         self.tabextract_type = args.tabextract_type
+        self.extend_header = args.extend_header
         self.sim_func = nn.CosineSimilarity(dim=-1)
         self.device = "cuda"       
 
@@ -171,6 +172,11 @@ class DensePassageRetriever:
             if str(i) in subtables:
                 row_ids = subtables[str(i)]["rid"]
                 col_ids = subtables[str(i)]["cid"]
+
+                row_ids, col_ids = table_trees[i].extend_header_boundary(row_ids, col_ids)
+
+                if self.extend_header:
+                    row_ids = table_trees[i].extend_row_headers(row_ids)
                 try:
                     subtable = table_trees[i].extract_subtable(row_ids, col_ids)
                 except Exception:

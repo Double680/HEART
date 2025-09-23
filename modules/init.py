@@ -31,6 +31,7 @@ def init_args():
     parser.add_argument("--tabform", action="store_true")  # only for dpr or gth
     parser.add_argument("--tabextract", action="store_true")  # only for dpr and tabform
     parser.add_argument("--tabextract_type", default="raw_ext", choices=["raw_ext", "grpo_ext"])
+    parser.add_argument("--extend_header", action="store_true")  # only for raw_ext, grpo_ext
 
     parser.add_argument("--eval", action="store_true")
 
@@ -82,6 +83,8 @@ def init_model_config(args):
                 setting += "_tabextract"
                 if args.tabextract_type != "none":
                     setting += f"_{args.tabextract_type}"
+                    if args.extend_header:
+                        setting += "_extend"
     save_root_setting = os.path.join(save_root_model, setting)
 
     ensure_dirs(save_root, save_root_model, save_root_setting)

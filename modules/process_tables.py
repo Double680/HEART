@@ -236,6 +236,22 @@ class TableStructure:
             content = content + '- ' + str(key) + ": " + ' -> '.join(cleaned_header) + '\n'
         return content
 
+    def extend_row_headers(self, row_ids):
+        extend_ids = []
+        for rid in row_ids:
+            while rid in self.row_parents.keys() and self.row_parents[rid] != rid:
+                rid = self.row_parents[rid]
+                extend_ids.append(rid)
+        final_ids = list(set(row_ids + extend_ids))        
+        return final_ids
+    
+    def extend_header_boundary(self, row_ids, col_ids):
+        extended_row_ids = list(range(self.row_header_boundary)) + row_ids
+        extended_row_ids = list(set(extended_row_ids))
+        extended_col_ids = list(range(self.col_header_boundary)) + col_ids
+        extended_col_ids = list(set(extended_col_ids))
+
+        return extended_row_ids, extended_col_ids
 
 def process_table_trees(tables, table_description):
     table_trees = []
