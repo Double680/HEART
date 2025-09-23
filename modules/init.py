@@ -81,7 +81,7 @@ def init_model_config(args):
             setting += "_tabform"
             if args.tabextract:
                 setting += "_tabextract"
-                if args.tabextract_type != "none":
+                if args.retrieve_type != "gth" and args.tabextract_type != "none":
                     setting += f"_{args.tabextract_type}"
                     if args.extend_header:
                         setting += "_extend"
