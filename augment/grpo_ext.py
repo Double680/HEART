@@ -8,6 +8,8 @@ from transformers import AutoModelForCausalLM
 import json
 import torch
 
+from modules.process_tables import TableStructure
+
 def make_conversation(example):
     with open("augment/ext_template.txt", "r") as file:
         template = file.read()
@@ -17,9 +19,13 @@ def make_conversation(example):
     tid = 0
     for i in range(len(example["paragraphs"])):
         if example["paragraphs"][i] == f"## Table {tid} ##":
-            tabular_content += f"Table {tid} - "
-            tabular_content += example["paragraphs"][i-1]
-            tabular_content += example["tables"][tid]
+            table_tree = TableStructure(example["tables"][tid], tid, example["table_description"])
+            tabular_content += f"## Table ID: {tid} ({table_tree.max_rows} rows, {table_tree.max_cols} columns) ##\n"
+            tabular_content += "Caption: " + example["paragraphs"][i-1] + "\n"
+            tabular_content += "Column Headers (ID: Name): \n"
+            tabular_content += table_tree.list_col_headers()
+            tabular_content += "Row Headers (ID: Name): \n"
+            tabular_content += table_tree.list_row_headers()
             tid += 1
     content = content.replace("<TABLES>", tabular_content)
 

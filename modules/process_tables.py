@@ -216,14 +216,24 @@ class TableStructure:
     def list_row_headers(self):
         content = ""
         for key in self.row_headers:
-            content = content + '- ' + key + ":" + ' -> '.join(self.row_headers[key]) + '\n'
+            header = self.row_headers[key]
+            cleaned_header = []
+            for item in header:
+                if len(item.strip()):
+                    cleaned_header.append(item)
+            content = content + '- ' + str(key) + ": " + ' -> '.join(cleaned_header) + '\n'
         return content
 
 
     def list_col_headers(self):
         content = ""
         for key in self.col_headers:
-            content = content + '- ' + key + ":" + ' -> '.join(self.col_headers[key]) + '\n'
+            header = self.col_headers[key]
+            cleaned_header = []
+            for item in header:
+                if len(item.strip()):
+                    cleaned_header.append(item)
+            content = content + '- ' + str(key) + ": " + ' -> '.join(cleaned_header) + '\n'
         return content
 
 

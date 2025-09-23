@@ -45,15 +45,13 @@ def make_conversation(example):
     tid = 0
     for i in range(len(example["paragraphs"])):
         if example["paragraphs"][i] == f"## Table {tid} ##":
-            tabular_content += f"## Table ID: {tid} ##\n"
-            tabular_content += "Caption: " + example["paragraphs"][i-1]
-
             table_tree = TableStructure(example["tables"][tid], tid, example["table_description"])
-            tabular_content += "Column Headers (ID, Name): \n"
+            tabular_content += f"## Table ID: {tid} ({table_tree.max_rows} rows, {table_tree.max_cols} columns) ##\n"
+            tabular_content += "Caption: " + example["paragraphs"][i-1] + "\n"
+            tabular_content += "Column Headers (ID: Name): \n"
             tabular_content += table_tree.list_col_headers()
-            tabular_content += "Row Headers (ID, Name): \n"
+            tabular_content += "Row Headers (ID: Name): \n"
             tabular_content += table_tree.list_row_headers()
-
             tid += 1
     content = content.replace("<TABLES>", tabular_content)
 
