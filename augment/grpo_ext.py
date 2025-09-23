@@ -146,7 +146,7 @@ def reward_func(completions, **kwargs):
 
 if __name__ == "__main__":
     train_data_path = 'datasets/multihiertt/train_new.json'
-    extract_model_path = 'models/Qwen3-4B'
+    extract_model_path = 'models/Qwen3-1.7B'
     save_model_path = f'models/HybTQA-tabextract'
 
     accelerator = Accelerator()
