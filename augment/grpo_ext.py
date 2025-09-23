@@ -162,7 +162,7 @@ if __name__ == "__main__":
         learning_rate=5e-6,
         num_train_epochs=2,
         per_device_train_batch_size=32,
-        max_completion_length=384,
+        max_completion_length=256,
         num_generations=8,
         max_prompt_length=1536,
         logging_steps=5,

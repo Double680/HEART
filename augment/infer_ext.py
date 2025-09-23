@@ -80,7 +80,7 @@ for item in tqdm(dataset):
         **model_inputs,
         temperature=0.7,
         top_p=0.95,
-        max_new_tokens=384
+        max_new_tokens=256
     )
     output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
     content = tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
