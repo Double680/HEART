@@ -38,7 +38,7 @@ def make_conversation(example):
     return prompt
 
 def reward_value(value):
-    return 4 * value
+    return 2 * value
     
 def format_reward(answer):
     reward = -6
@@ -67,7 +67,8 @@ def get_evid_pred(answer):
             assert isinstance(int(key), int)
             assert "rid" in output[key].keys()
             assert "cid" in output[key].keys()
-            assert isinstance(output[key], list) and all(isinstance(item, int) for item in output[key])
+            assert isinstance(output[key]['rid'], list) and all(isinstance(item, int) for item in output[key]['rid'])
+            assert isinstance(output[key]['cid'], list) and all(isinstance(item, int) for item in output[key]['cid'])
             pred[key] = output[key]
         except Exception:
             continue
@@ -136,7 +137,7 @@ def reward_func(completions, **kwargs):
     table_evid_gth = [list(set(kwargs["qa"][id]["table_evidence"])) for id in range(len(kwargs["qa"]))]
 
     table_scores = [
-        IoU_eval(pred, gth) for pred, gth in zip(table_evid_pred, table_evid_gth)
+        IoU_eval(pred, gth) + recall_eval(pred, gth) for pred, gth in zip(table_evid_pred, table_evid_gth)
     ]
 
     extract_rewards = [reward_value(table_score) for table_score in table_scores]
