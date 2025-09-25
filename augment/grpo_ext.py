@@ -10,24 +10,27 @@ import torch
 
 from modules.process_tables import TableStructure
 
-def make_conversation(example):
+def make_conversation(sample, tid):
     with open("augment/ext_template.txt", "r") as file:
         template = file.read()
 
-    content = template.replace("<QUESTION>", example["qa"]["question"])
-    tabular_content = ""
-    tid = 0
-    for i in range(len(example["paragraphs"])):
-        if example["paragraphs"][i] == f"## Table {tid} ##":
-            table_tree = TableStructure(example["tables"][tid], tid, example["table_description"])
-            tabular_content += f"## Table ID: {tid} ({table_tree.max_rows} rows, {table_tree.max_cols} columns) ##\n"
-            tabular_content += "Caption: " + example["paragraphs"][i-1] + "\n"
-            tabular_content += "Column Headers (ID: Name): \n"
-            tabular_content += table_tree.list_col_headers()
-            tabular_content += "Row Headers (ID: Name): \n"
-            tabular_content += table_tree.list_row_headers()
-            tid += 1
-    content = content.replace("<TABLES>", tabular_content)
+    content = template.replace("<QUESTION>", sample["qa"]["question"])
+
+    for i in range(len(sample["paragraphs"])):
+        if sample["paragraphs"][i] == f"## Table {tid} ##":
+            table_tree = TableStructure(sample["tables"][tid], tid, sample["table_description"])
+            table_instruction = sample["paragraphs"][i-1]
+            content = content.replace("<INSTRUCTION>", table_instruction)
+
+            table_content = sample["tables"][tid]
+            content = content.replace("<TABLE>", table_content)
+
+            table_row_headers = "Row Headers (ID: Name): \n" + table_tree.list_row_headers() + "\n"
+            table_col_headers = "Column Headers (ID: Name): \n" + table_tree.list_col_headers() + "\n"
+            table_headers = table_row_headers + table_col_headers
+            content = content.replace("<HEADERS>", table_headers)
+            
+            break
 
     prompt = {
         "prompt": [{
@@ -41,16 +44,11 @@ def reward_value(value):
     return 2 * value
     
 def format_reward(answer):
-    reward = -6
+    reward = -2
     if "<answer>" in answer and "</answer>" in answer:
         reward += 1
     if len(answer.split("<answer>")[-1].split("</answer>")[0]) > 0:
         reward += 1
-    try:
-        answer = json.loads(answer.split("<answer>")[-1].split("</answer>")[0].strip('\n'))
-        reward += 4
-    except Exception:
-        pass
 
     return reward
 
@@ -147,7 +145,7 @@ def reward_func(completions, **kwargs):
 if __name__ == "__main__":
     train_data_path = 'datasets/multihiertt/train_new.json'
     extract_model_path = 'models/Qwen3-1.7B'
-    save_model_path = f'models/HybTQA-tabextract'
+    save_model_path = f'models/HybTQA-grpo-ext'
 
     accelerator = Accelerator()
 
@@ -164,7 +162,7 @@ if __name__ == "__main__":
         per_device_train_batch_size=32,
         max_completion_length=256,
         num_generations=8,
-        max_prompt_length=1536,
+        max_prompt_length=1024,
         logging_steps=5,
         save_steps=2000,
         report_to=None
