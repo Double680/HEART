@@ -13,7 +13,8 @@ from modules.process_tables import TableStructure
 parser = argparse.ArgumentParser()
 parser.add_argument('--dev', action='store_true')
 parser.add_argument('--cover', action='store_true')
-parser.add_argument('--name', default='none', type=str)
+parser.add_argument('--end', type=int, default=-1)
+parser.add_argument('--name', type=str, default='none')
 parser.add_argument('--path', type=str, default='models/Qwen3-1.7B')
 args = parser.parse_args()
 
@@ -71,7 +72,13 @@ def ensure_dirs(*dirs):
         if not os.path.exists(dir):
             os.mkdir(dir)
 
+end = args.end if args.end != -1 else len(dataset)
+cnt = 0
+
 for item in tqdm(dataset):
+    cnt += 1
+    if cnt == end:
+        break
     ensure_dirs(f"./stored/{item["uid"]}")
     save_file_path = f"./stored/{item["uid"]}/table_ext_{args.name}.jsonl"
     if not args.cover and os.path.exists(save_file_path):
