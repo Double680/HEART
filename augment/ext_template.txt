@@ -1,17 +1,18 @@
-Given a question and a hierarchical table with its caption and headers:
+Given a question and a hierarchical table with its instruction and headers:
 Question: <QUESTION> 
-Table Caption: <CAPTION> 
-Table Headers: <TABLES>
+Table Instruction: <INSTRUCTION> 
+Table Headers: 
+<HEADERS>
 Extract IDs of useful rows and columns for the table to simplify the context. 
 - The rows and columns should be precise that all useful rows and columns should be preserved, while additional redundant rows or columns should not be involved. 
-- The output should be in folloing format within <answer> </answer> tags:
+- The output should be in following format within <answer> </answer> tags, where the extracted row IDs should be within <rows> </rows> tags and the extracted column IDS should be within <columns> </columns> tags:
 <answer>
-Extract Row IDs: [R1, R2, ...]
-Extract Column IDs: [C1, C2, ...]
+<rows>[ROW_1] | [ROW_2] | ...</rows>
+<columns>[COL_1] | [COL_2] | ...</columns>
 </answer>
-where all R1, R2, ... and C1, C2, ... should be integer IDs. 
+where all [ROW_1], [ROW_2], ... and [COL_1], [COL_2], ... should be integer IDs, seperated by ' | '. 
 For example, the following output are legal:
 <answer>
-Extract Row IDs: [3, 6, 7]
-Extract Column IDs: [2, 5, 8, 10]
+<rows>3 | 6 | 7</rows>
+<columns>2 | 5 | 8 | 10</columns>
 </answer> 

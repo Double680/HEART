@@ -143,90 +143,41 @@ class DensePassageRetriever:
 
         return update_tables, retrieved_table_inds
 
-    def retrieve_tabform_table_evidence(self, sample, tabextract_path):
+    def retrieve_tabform_table_evidence(self, sample, table_process_path, filter=False):
         tables = sample['tables']
         table_description = sample["table_description"]
         table_trees = process_table_trees(tables, table_description)
 
-        result_subtables = []
+        result_tables = []
 
-        with open(tabextract_path, "r") as file:
-            try:
-                subtables_txt = json.loads(file.read())
-                subtables_dic = json.loads(subtables_txt["subtables"])
-            except Exception:
-                subtables_dic = {}
-
-            subtables = {}
-            for key in subtables_dic.keys():
+        with open(table_process_path, "r") as file:
+            process_txt = file.readlines()
+            process_dic = {}
+            for txt in process_txt:
                 try:
-                    assert isinstance(key, str)
-                    assert isinstance(int(key), int)
-                    assert "rid" in subtables_dic[key].keys()
-                    assert "cid" in subtables_dic[key].keys()
-                    assert isinstance(subtables_dic[key]["rid"], list) and all(isinstance(item, int) for item in subtables_dic[key]["rid"])
-                    assert isinstance(subtables_dic[key]["cid"], list) and all(isinstance(item, int) for item in subtables_dic[key]["cid"])
-                    subtables[key] = subtables_dic[key]
-                except Exception:
-                    continue
-
-        for i in range(len(tables)):
-            if str(i) in subtables:
-                row_ids = subtables[str(i)]["rid"]
-                col_ids = subtables[str(i)]["cid"]
-
-                row_ids, col_ids = table_trees[i].extend_header_boundary(row_ids, col_ids)
-
-                if self.extend_header:
-                    row_ids = table_trees[i].extend_row_headers(row_ids)
-                try:
-                    subtable = table_trees[i].extract_subtable(row_ids, col_ids)
-                except Exception:
-                    subtable = 'NONE'
-            else:
-                subtable = 'NONE'
-            result_subtables.append(subtable)
-
-        return result_subtables, subtables
-        
-    def filter_tabform_table_evidence(self, sample, tabfilter_path):
-        tables = sample['tables']
-        table_description = sample["table_description"]
-        table_trees = process_table_trees(tables, table_description)
-
-        result_subtables = []
-
-        with open(tabfilter_path, "r") as file:
-            try:
-                filter_txt = json.loads(file.read())
-                filter_dic = json.loads(filter_txt["filter"])
-            except Exception:
-                filter_dic = {}
-
-            filters = {}
-            for key in filter_dic.keys():
-                try:
-                    assert isinstance(key, str)
-                    assert isinstance(int(key), int)
-                    assert "rid" in filter_dic[key].keys()
-                    assert "cid" in filter_dic[key].keys()
-                    assert isinstance(filter_dic[key]["rid"], list) and all(isinstance(item, int) for item in filter_dic[key]["rid"])
-                    assert isinstance(filter_dic[key]["cid"], list) and all(isinstance(item, int) for item in filter_dic[key]["cid"])
-                    filters[key] = filter_dic[key]
+                    txt_json = json.loads(txt)
+                    process_dic[txt_json["tid"]] = {
+                        "rids": txt_json["rids"],
+                        "cids": txt_json["cids"]
+                    }
                 except Exception:
                     continue
 
         subtables = {}
         for i in range(len(tables)):
-            if str(i) in filters:
-                row_ids = []
-                for rid in range(table_trees[i].max_rows):
-                    if rid not in filters[str(i)]["rid"]:
-                        row_ids.append(rid)
-                col_ids = []
-                for cid in range(table_trees[i].max_cols):
-                    if cid not in filters[str(i)]["cid"]:
-                        col_ids.append(cid)
+            if i in process_dic:
+                if filter:
+                    row_ids = []
+                    for rid in range(table_trees[i].max_rows):
+                        if rid not in process_dic[i]["rids"]:
+                            row_ids.append(rid)
+                    col_ids = []
+                    for cid in range(table_trees[i].max_cols):
+                        if cid not in process_dic[i]["cids"]:
+                            col_ids.append(cid)
+                else:
+                    row_ids = process_dic[i]["rids"]
+                    col_ids = process_dic[i]["cids"]
 
                 row_ids, col_ids = table_trees[i].extend_header_boundary(row_ids, col_ids)
 
@@ -237,12 +188,13 @@ class DensePassageRetriever:
                 except Exception:
                     subtable = 'NONE'
 
-                subtables[str(i)] = {"rid": row_ids, "cid": col_ids}
+                subtables[i] = {"rids": row_ids, "cids": col_ids}
             else:
                 subtable = 'NONE'
-            result_subtables.append(subtable)
 
-        return result_subtables, subtables
+            result_tables.append(subtable)
+
+        return result_tables, subtables
 
     def retrieve(self, sample):
         uid = sample['uid']
@@ -263,11 +215,11 @@ class DensePassageRetriever:
         
         if self.tabform:
             if self.tabextract:
-                tabextract_path = os.path.join(self.path_root, uid, f"table_{self.tabextract_type}.json")
+                tabextract_path = os.path.join(self.path_root, uid, f"table_ext_{self.tabextract_type}.jsonl")
                 update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, tabextract_path)
             elif self.tabfilter:
-                tabfilter_path = os.path.join(self.path_root, uid, f"table_filter_{self.tabfilter_type}.json")
-                update_tables, retrieved_table_inds = self.filter_tabform_table_evidence(sample, tabfilter_path)
+                tabfilter_path = os.path.join(self.path_root, uid, f"table_fil_{self.tabfilter_type}.jsonl")
+                update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, tabfilter_path, filter=True)
             else:
                 update_tables = sample['tables']
                 retrieved_table_inds = None

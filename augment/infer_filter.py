@@ -36,24 +36,24 @@ tokenizer = AutoTokenizer.from_pretrained(model_path)
 with open(src_file, "r") as file:
     dataset = json.loads(file.read())
 
-def make_conversation(example):
+def make_conversation(sample, tid):
     with open("augment/filter_template.txt", "r") as file:
         template = file.read()
 
-    content = template.replace("<QUESTION>", example["qa"]["question"])
-    tabular_content = ""
-    tid = 0
-    for i in range(len(example["paragraphs"])):
-        if example["paragraphs"][i] == f"## Table {tid} ##":
-            table_tree = TableStructure(example["tables"][tid], tid, example["table_description"])
-            tabular_content += f"## Table ID: {tid} ({table_tree.max_rows} rows, {table_tree.max_cols} columns) ##\n"
-            tabular_content += "Caption: " + example["paragraphs"][i-1] + "\n"
-            tabular_content += "Column Headers (ID: Name): \n"
-            tabular_content += table_tree.list_col_headers()
-            tabular_content += "Row Headers (ID: Name): \n"
-            tabular_content += table_tree.list_row_headers()
-            tid += 1
-    content = content.replace("<TABLES>", tabular_content)
+    content = template.replace("<QUESTION>", sample["qa"]["question"])
+
+    for i in range(len(sample["paragraphs"])):
+        if sample["paragraphs"][i] == f"## Table {tid} ##":
+            table_tree = TableStructure(sample["tables"][tid], tid, sample["table_description"])
+            table_instruction = sample["paragraphs"][i-1]
+            content = content.replace("<INSTRUCTION>", table_instruction)
+
+            table_row_headers = "Row Headers (ID: Name): \n" + table_tree.list_row_headers() + "\n"
+            table_col_headers = "Column Headers (ID: Name): \n" + table_tree.list_col_headers() + "\n"
+            table_headers = table_row_headers + table_col_headers
+            content = content.replace("<HEADERS>", table_headers)
+            
+            break
 
     messages = [{
         "role": "user", 
@@ -68,27 +68,44 @@ def ensure_dirs(*dirs):
             os.mkdir(dir)
 
 for item in tqdm(dataset):
-    messages = make_conversation(item)
-    text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
-        enable_thinking=False
-    )
-    model_inputs = tokenizer([text], return_tensors="pt").to("cuda")
-    generated_ids = model.generate(
-        **model_inputs,
-        temperature=0.7,
-        top_p=0.95,
-        max_new_tokens=384
-    )
-    output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
-    content = tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
-    filters = content.split("<answer>")[-1].split("</answer>")[0].strip('\n')
-    filtered_item = {
-        "filter": filters
-    }
     ensure_dirs(f"./stored/{item["uid"]}")
-    with open(f"./stored/{item["uid"]}/table_filter_{args.name}.json", "w") as file:
-        file.write(json.dumps(filtered_item))
-        file.write('\n')
+    with open(f"./stored/{item["uid"]}/table_fil_{args.name}.jsonl", "w") as file:
+        for tid in range(len(item["tables"])):
+            messages = make_conversation(item, tid)
+            text = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=False
+            )
+            model_inputs = tokenizer([text], return_tensors="pt").to("cuda")
+            generated_ids = model.generate(
+                **model_inputs,
+                temperature=0.7,
+                top_p=0.95,
+                max_new_tokens=256
+            )
+            output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
+            content = tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
+
+            filters = content.split("<answer>")[-1].split("</answer>")[0].strip('\n')
+            rows = filters.split("<rows>")[-1].split("</rows>")[0].strip().split(' | ')
+            rids = []
+            for row in rows:
+                try:
+                    rids.append(int(row))
+                except Exception:
+                    continue
+
+            columns = filters.split("<columns>")[-1].split("</columns>")[0].strip().split(' | ')
+            cids = []
+            for column in columns:
+                try:
+                    cids.append(int(column))
+                except Exception:
+                    continue
+        
+            filtered_item = {"tid": tid, "rids": rids, "cids": cids}
+
+            file.write(json.dumps(filtered_item))
+            file.write('\n')
