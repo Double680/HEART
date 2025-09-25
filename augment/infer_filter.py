@@ -12,6 +12,7 @@ from modules.process_tables import TableStructure
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dev', action='store_true')
+parser.add_argument('--cover', action='store_true')
 parser.add_argument('--name', default='none', type=str)
 parser.add_argument('--path', type=str, default='models/Qwen3-1.7B')
 args = parser.parse_args()
@@ -48,6 +49,9 @@ def make_conversation(sample, tid):
             table_instruction = sample["paragraphs"][i-1]
             content = content.replace("<INSTRUCTION>", table_instruction)
 
+            table_content = sample["tables"][tid]
+            content = content.replace("<TABLE>", table_content)
+
             table_row_headers = "Row Headers (ID: Name): \n" + table_tree.list_row_headers() + "\n"
             table_col_headers = "Column Headers (ID: Name): \n" + table_tree.list_col_headers() + "\n"
             table_headers = table_row_headers + table_col_headers
@@ -69,7 +73,10 @@ def ensure_dirs(*dirs):
 
 for item in tqdm(dataset):
     ensure_dirs(f"./stored/{item["uid"]}")
-    with open(f"./stored/{item["uid"]}/table_fil_{args.name}.jsonl", "w") as file:
+    save_file_path = f"./stored/{item["uid"]}/table_fil_{args.name}.jsonl"
+    if not args.cover and os.path.exists(save_file_path):
+        continue
+    with open(save_file_path, "w") as file:
         for tid in range(len(item["tables"])):
             messages = make_conversation(item, tid)
             text = tokenizer.apply_chat_template(

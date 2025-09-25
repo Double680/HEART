@@ -1,6 +1,8 @@
 Given a question and a hierarchical table with its instruction and headers:
 Question: <QUESTION> 
 Table Instruction: <INSTRUCTION> 
+Table Content: 
+<TABLE>
 Table Headers: 
 <HEADERS>
 Extract IDs of useful rows and columns for the table to simplify the context. 

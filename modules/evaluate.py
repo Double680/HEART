@@ -127,7 +127,7 @@ def recall_eval(pred, gth):
         cid = int(cid)
         if tid in pred:
             tid_pred = pred[tid]
-            if rid in tid_pred["rid"] and cid in tid_pred["cid"]:
+            if rid in tid_pred["rids"] and cid in tid_pred["cids"]:
                 recall_cnt += 1
         total_cnt += 1
 
