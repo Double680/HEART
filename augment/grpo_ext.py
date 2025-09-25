@@ -10,27 +10,24 @@ import torch
 
 from modules.process_tables import TableStructure
 
-def make_conversation(sample, tid):
+def make_conversation(sample):
     with open("augment/ext_template.txt", "r") as file:
         template = file.read()
 
     content = template.replace("<QUESTION>", sample["qa"]["question"])
 
-    for i in range(len(sample["paragraphs"])):
-        if sample["paragraphs"][i] == f"## Table {tid} ##":
-            table_tree = TableStructure(sample["tables"][tid], tid, sample["table_description"])
-            table_instruction = sample["paragraphs"][i-1]
-            content = content.replace("<INSTRUCTION>", table_instruction)
+    tid = int(sample["paragraphs"][1].split("## Table ")[-1].split(" ##")[0])
+    table_tree = TableStructure(sample["table"], tid, sample["table_description"])
+    table_instruction = sample["paragraphs"][0]
+    content = content.replace("<INSTRUCTION>", table_instruction)
 
-            table_content = sample["tables"][tid]
-            content = content.replace("<TABLE>", table_content)
+    table_content = sample["table"]
+    content = content.replace("<TABLE>", table_content)
 
-            table_row_headers = "Row Headers (ID: Name): \n" + table_tree.list_row_headers() + "\n"
-            table_col_headers = "Column Headers (ID: Name): \n" + table_tree.list_col_headers() + "\n"
-            table_headers = table_row_headers + table_col_headers
-            content = content.replace("<HEADERS>", table_headers)
-            
-            break
+    table_row_headers = "Row Headers (ID: Name): \n" + table_tree.list_row_headers() + "\n"
+    table_col_headers = "Column Headers (ID: Name): \n" + table_tree.list_col_headers() + "\n"
+    table_headers = table_row_headers + table_col_headers
+    content = content.replace("<HEADERS>", table_headers)
 
     prompt = {
         "prompt": [{
@@ -53,23 +50,24 @@ def format_reward(answer):
     return reward
 
 def get_evid_pred(answer):
-    try:
-        output = json.loads(answer)
-    except Exception:
-        output = {}
-
-    pred = {}
-    for key in output.keys():
+    subtables = answer.split("<answer>")[-1].split("</answer>")[0].strip('\n')
+    rows = subtables.split("<rows>")[-1].split("</rows>")[0].strip().split(' | ')
+    rids = []
+    for row in rows:
         try:
-            assert isinstance(key, str)
-            assert isinstance(int(key), int)
-            assert "rid" in output[key].keys()
-            assert "cid" in output[key].keys()
-            assert isinstance(output[key]['rid'], list) and all(isinstance(item, int) for item in output[key]['rid'])
-            assert isinstance(output[key]['cid'], list) and all(isinstance(item, int) for item in output[key]['cid'])
-            pred[key] = output[key]
+            rids.append(int(row))
         except Exception:
             continue
+
+    columns = subtables.split("<columns>")[-1].split("</columns>")[0].strip().split(' | ')
+    cids = []
+    for column in columns:
+        try:
+            cids.append(int(column))
+        except Exception:
+            continue
+
+    pred = { "rids": rids, "cids": cids }
 
     return pred
 
@@ -77,47 +75,40 @@ def recall_eval(pred, gth):
     recall_cnt = 0
     total_cnt = 0
     for item in gth:
-        tid, rid, cid = item.split('-')
+        _, rid, cid = item.split('-')
         rid = int(rid)
         cid = int(cid)
-        if tid in pred:
-            tid_pred = pred[tid]
-            if rid in tid_pred["rid"] and cid in tid_pred["cid"]:
-                recall_cnt += 1
+
+        if rid in pred["rids"] and cid in pred["cids"]:
+            recall_cnt += 1
+
         total_cnt += 1
 
-    recall_score = recall_cnt / total_cnt if total_cnt else 1.0
+    recall_score = (recall_cnt - total_cnt) * 0.2
 
     return recall_score
 
 def IoU_eval(pred, gth):
-    gth_dic = {}
+    gth_dic = { "rids": [], "cids": [] }
     for item in gth: #"0-2-8"
-        tid, rid, cid = item.split('-')
+        _, rid, cid = item.split('-')
         rid = int(rid)
         cid = int(cid)
-        if tid not in gth_dic:
-            gth_dic[tid] = {"rid": [], "cid": []}
-        if rid not in gth_dic[tid]["rid"]:
-            gth_dic[tid]["rid"].append(rid)
-        if cid not in gth_dic[tid]["cid"]:
-            gth_dic[tid]["cid"].append(cid)
-    
-    row_joint, row_union = 0, 0
-    col_joint, col_union = 0, 0
 
-    for key in pred.keys():
-        if key not in gth_dic:
-            gth_dic[key] = {"rid": [], "cid": []}
-        pred_row_set = set(pred[key]["rid"])
-        gth_row_set = set(gth_dic[key]["rid"])
-        row_joint += len(pred_row_set.intersection(gth_row_set))
-        row_union += len(pred_row_set.union(gth_row_set))
+        if rid not in gth_dic["rids"]:
+            gth_dic["rids"].append(rid)
+        if cid not in gth_dic["cids"]:
+            gth_dic["cids"].append(cid)
 
-        pred_col_set = set(pred[key]["cid"])
-        gth_col_set = set(gth_dic[key]["cid"])
-        col_joint += len(pred_col_set.intersection(gth_col_set))
-        col_union += len(pred_col_set.union(gth_col_set))
+    pred_row_set = set(pred["rids"])
+    gth_row_set = set(gth_dic["rids"])
+    row_joint = len(pred_row_set.intersection(gth_row_set))
+    row_union = len(pred_row_set.union(gth_row_set))
+
+    pred_col_set = set(pred["cids"])
+    gth_col_set = set(gth_dic["cids"])
+    col_joint = len(pred_col_set.intersection(gth_col_set))
+    col_union = len(pred_col_set.union(gth_col_set))
         
     row_score = row_joint / row_union if row_union else 1.0
     col_score = col_joint / col_union if col_union else 1.0
@@ -143,26 +134,26 @@ def reward_func(completions, **kwargs):
     return rewards
 
 if __name__ == "__main__":
-    train_data_path = 'datasets/multihiertt/train_new.json'
+    train_data_path = 'datasets/multihiertt/train_ext_hit.json'
     extract_model_path = 'models/Qwen3-1.7B'
     save_model_path = f'models/HybTQA-grpo-ext'
 
-    accelerator = Accelerator()
+    # accelerator = Accelerator()
 
     dataset = load_dataset('json', data_files=train_data_path)
 
     dataset = dataset.map(make_conversation)
-    dataset = dataset.remove_columns(["uid", "tables"])
+    # dataset = dataset.remove_columns(["uid", "tables"])
     dataset = dataset["train"]
 
     training_args = GRPOConfig(
         output_dir=save_model_path,
         learning_rate=5e-6,
-        num_train_epochs=2,
+        num_train_epochs=1,
         per_device_train_batch_size=32,
         max_completion_length=256,
         num_generations=8,
-        max_prompt_length=1024,
+        max_prompt_length=768,
         logging_steps=5,
         save_steps=2000,
         report_to=None
