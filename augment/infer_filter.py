@@ -37,7 +37,7 @@ with open(src_file, "r") as file:
     dataset = json.loads(file.read())
 
 def make_conversation(example):
-    with open("augment/ext_template.txt", "r") as file:
+    with open("augment/filter_template.txt", "r") as file:
         template = file.read()
 
     content = template.replace("<QUESTION>", example["qa"]["question"])
@@ -80,15 +80,15 @@ for item in tqdm(dataset):
         **model_inputs,
         temperature=0.7,
         top_p=0.95,
-        max_new_tokens=256
+        max_new_tokens=384
     )
     output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
     content = tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
-    subtables = content.split("<answer>")[-1].split("</answer>")[0].strip('\n')
-    subtable_item = {
-        "subtables": subtables
+    filters = content.split("<answer>")[-1].split("</answer>")[0].strip('\n')
+    filtered_item = {
+        "filter": filters
     }
     ensure_dirs(f"./stored/{item["uid"]}")
-    with open(f"./stored/{item["uid"]}/table_{args.name}.json", "w") as file:
-        file.write(json.dumps(subtable_item))
+    with open(f"./stored/{item["uid"]}/table_filter_{args.name}.json", "w") as file:
+        file.write(json.dumps(filtered_item))
         file.write('\n')

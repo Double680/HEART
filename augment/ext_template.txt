@@ -1,14 +1,17 @@
-Given a question and several hierarchical tables with their captions and headers:
+Given a question and a hierarchical table with its caption and headers:
 Question: <QUESTION> 
-Tables: 
-<TABLES>
-Point out IDs of useful rows and columns for each table to simplify the context for question answering. 
+Table Caption: <CAPTION> 
+Table Headers: <TABLES>
+Extract IDs of useful rows and columns for the table to simplify the context. 
 - The rows and columns should be precise that all useful rows and columns should be preserved, while additional redundant rows or columns should not be involved. 
-- The output should be in JSON format within <answer> </answer> tags:
+- The output should be in folloing format within <answer> </answer> tags:
 <answer>
-{"<TABLE_ID_0>": {"rid": [<ROW_ID_0>, <ROW_ID_1>, ...], "cid": [<COLUMN_ID_0>, <COLUMN_ID_1>, ...]}, "<TABLE_ID_1>": ...}
+Extract Row IDs: [R1, R2, ...]
+Extract Column IDs: [C1, C2, ...]
 </answer>
-where all TABLE_ID, ROW_ID and COLUMN_ID should be integer IDs (start from 0). For example, the following output are legal:
+where all R1, R2, ... and C1, C2, ... should be integer IDs. 
+For example, the following output are legal:
 <answer>
-{"0": {"rid": [1, 2, 5], "cid": [0, 4, 7]}, "2": {"rid": [0, 3], "cid": [1, 2, 8]}}
+Extract Row IDs: [3, 6, 7]
+Extract Column IDs: [2, 5, 8, 10]
 </answer> 

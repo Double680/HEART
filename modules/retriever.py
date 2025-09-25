@@ -102,6 +102,8 @@ class DensePassageRetriever:
         self.tabform = args.tabform
         self.tabextract = args.tabextract
         self.tabextract_type = args.tabextract_type
+        self.tabfilter = args.tabfilter
+        self.tabfilter_type = args.tabfilter_type
         self.extend_header = args.extend_header
         self.sim_func = nn.CosineSimilarity(dim=-1)
         self.device = "cuda"       
@@ -187,6 +189,60 @@ class DensePassageRetriever:
 
         return result_subtables, subtables
         
+    def filter_tabform_table_evidence(self, sample, tabfilter_path):
+        tables = sample['tables']
+        table_description = sample["table_description"]
+        table_trees = process_table_trees(tables, table_description)
+
+        result_subtables = []
+
+        with open(tabfilter_path, "r") as file:
+            try:
+                filter_txt = json.loads(file.read())
+                filter_dic = json.loads(filter_txt["filter"])
+            except Exception:
+                filter_dic = {}
+
+            filters = {}
+            for key in filter_dic.keys():
+                try:
+                    assert isinstance(key, str)
+                    assert isinstance(int(key), int)
+                    assert "rid" in filter_dic[key].keys()
+                    assert "cid" in filter_dic[key].keys()
+                    assert isinstance(filter_dic[key]["rid"], list) and all(isinstance(item, int) for item in filter_dic[key]["rid"])
+                    assert isinstance(filter_dic[key]["cid"], list) and all(isinstance(item, int) for item in filter_dic[key]["cid"])
+                    filters[key] = filter_dic[key]
+                except Exception:
+                    continue
+
+        subtables = {}
+        for i in range(len(tables)):
+            if str(i) in filters:
+                row_ids = []
+                for rid in range(table_trees[i].max_rows):
+                    if rid not in filters[str(i)]["rid"]:
+                        row_ids.append(rid)
+                col_ids = []
+                for cid in range(table_trees[i].max_cols):
+                    if cid not in filters[str(i)]["cid"]:
+                        col_ids.append(cid)
+
+                row_ids, col_ids = table_trees[i].extend_header_boundary(row_ids, col_ids)
+
+                if self.extend_header:
+                    row_ids = table_trees[i].extend_row_headers(row_ids)
+                try:
+                    subtable = table_trees[i].extract_subtable(row_ids, col_ids)
+                except Exception:
+                    subtable = 'NONE'
+
+                subtables[str(i)] = {"rid": row_ids, "cid": col_ids}
+            else:
+                subtable = 'NONE'
+            result_subtables.append(subtable)
+
+        return result_subtables, subtables
 
     def retrieve(self, sample):
         uid = sample['uid']
@@ -209,6 +265,9 @@ class DensePassageRetriever:
             if self.tabextract:
                 tabextract_path = os.path.join(self.path_root, uid, f"table_{self.tabextract_type}.json")
                 update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, tabextract_path)
+            elif self.tabfilter:
+                tabfilter_path = os.path.join(self.path_root, uid, f"table_filter_{self.tabfilter_type}.json")
+                update_tables, retrieved_table_inds = self.filter_tabform_table_evidence(sample, tabfilter_path)
             else:
                 update_tables = sample['tables']
                 retrieved_table_inds = None

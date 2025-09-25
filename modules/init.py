@@ -30,7 +30,9 @@ def init_args():
     parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
     parser.add_argument("--tabform", action="store_true")  # only for dpr or gth
     parser.add_argument("--tabextract", action="store_true")  # only for dpr and tabform
-    parser.add_argument("--tabextract_type", default="raw_ext", choices=["raw_ext", "grpo_ext"])
+    parser.add_argument("--tabextract_type", default="none", choices=["none", "raw_ext", "grpo_ext"])
+    parser.add_argument("--tabfilter", action="store_true")  # only for dpr and tabform
+    parser.add_argument("--tabfilter_type", default="none", choices=["none", "raw_fil", "grpo_fil"])
     parser.add_argument("--extend_header", action="store_true")  # only for raw_ext, grpo_ext
 
     parser.add_argument("--eval", action="store_true")
@@ -83,6 +85,12 @@ def init_model_config(args):
                 setting += "_tabextract"
                 if args.retrieve_type != "gth" and args.tabextract_type != "none":
                     setting += f"_{args.tabextract_type}"
+                    if args.extend_header:
+                        setting += "_extend"
+            elif args.tabfilter:
+                setting += "_tabfilter"
+                if args.retrieve_type != "gth" and args.tabfilter_type != "none":
+                    setting += f"_{args.tabfilter_type}"
                     if args.extend_header:
                         setting += "_extend"
     save_root_setting = os.path.join(save_root_model, setting)

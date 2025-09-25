@@ -1,0 +1,17 @@
+Given a question and a hierarchical table with its captions and headers:
+Question: <QUESTION> 
+Table Caption: <CAPTION> 
+Table Headers: <TABLES>
+Filter out IDs of question-irrelevant rows and columns for each table to simplify the context. 
+- The headers of filtered rows and columns should not include useful attributes for answering the question.
+- The output should be in folloing format within <answer> </answer> tags:
+<answer>
+Filtered Row IDs: [R1, R2, ...]
+Filtered Column IDs: [C1, C2, ...]
+</answer>
+where all R1, R2, ... and C1, C2, ... should be integer IDs. 
+For example, the following output are legal:
+<answer>
+Filtered Row IDs: [3, 6, 7]
+Filtered Column IDs: [2, 5, 8, 10]
+</answer> 
