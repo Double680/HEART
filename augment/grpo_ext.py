@@ -84,7 +84,7 @@ def recall_eval(pred, gth):
 
         total_cnt += 1
 
-    recall_score = (recall_cnt - total_cnt) * 0.2
+    recall_score = (recall_cnt - total_cnt) * 0.5
 
     return recall_score
 
@@ -138,7 +138,7 @@ if __name__ == "__main__":
     extract_model_path = 'models/Qwen3-1.7B'
     save_model_path = f'models/HybTQA-grpo-ext'
 
-    # accelerator = Accelerator()
+    accelerator = Accelerator()
 
     dataset = load_dataset('json', data_files=train_data_path)
 
@@ -150,7 +150,7 @@ if __name__ == "__main__":
         output_dir=save_model_path,
         learning_rate=5e-6,
         num_train_epochs=1,
-        per_device_train_batch_size=32,
+        per_device_train_batch_size=64,
         max_completion_length=256,
         num_generations=8,
         max_prompt_length=768,
