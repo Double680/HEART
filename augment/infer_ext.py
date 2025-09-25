@@ -77,7 +77,7 @@ cnt = 0
 
 for item in tqdm(dataset):
     cnt += 1
-    if cnt == end:
+    if cnt > end:
         break
     ensure_dirs(f"./stored/{item["uid"]}")
     save_file_path = f"./stored/{item["uid"]}/table_ext_{args.name}.jsonl"
