@@ -46,15 +46,14 @@ def rerank_table_evidence(tables, table_description, question):
         for rid in range(row_floor, row_ceil):
             row_evid = table_tree.extract_row(rid, extend=True)
             row_evid = reranker.doc_format(row_evid)
-            row_score = reranker.reranker.score(question, row_evid)[0].outputs.score
-            print(row_score)
+            row_score = reranker.reranker.score(question, row_evid, use_tqdm=False)[0].outputs.score
             rerank_scores[i]["rids"][rid] = row_score
 
         col_floor, col_ceil = table_tree.col_header_boundary, table_tree.max_cols
         for cid in range(col_floor, col_ceil):
             col_evid = table_tree.extract_col(cid)
             col_evid = reranker.doc_format(col_evid)
-            col_score = reranker.reranker.score(question, col_evid)[0].outputs.score
+            col_score = reranker.reranker.score(question, col_evid, use_tqdm=False)[0].outputs.score
             rerank_scores[i]["cids"][cid] = col_score
 
     return rerank_scores
