@@ -5,7 +5,7 @@ from accelerate import Accelerator
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer
 from transformers import AutoModelForCausalLM
-import json
+import numpy as np
 import torch
 
 from modules.process_tables import TableStructure
@@ -84,7 +84,7 @@ def recall_eval(pred, gth):
 
         total_cnt += 1
 
-    recall_score = (recall_cnt - total_cnt) * 0.5
+    recall_score = recall_cnt / total_cnt
 
     return recall_score
 
@@ -125,11 +125,17 @@ def reward_func(completions, **kwargs):
     ]
     table_evid_gth = [list(set(kwargs["qa"][id]["table_evidence"])) for id in range(len(kwargs["qa"]))]
 
-    table_scores = [
-        IoU_eval(pred, gth) + recall_eval(pred, gth) for pred, gth in zip(table_evid_pred, table_evid_gth)
+    IoU_scores = [
+        IoU_eval(pred, gth) for pred, gth in zip(table_evid_pred, table_evid_gth)
+    ]
+    recall_scores = [
+        recall_eval(pred, gth) for pred, gth in zip(table_evid_pred, table_evid_gth)
     ]
 
-    extract_rewards = [reward_value(table_score) for table_score in table_scores]
+    print("IoU_mean: ", np.mean(IoU_scores))
+    print("Recall_mean: ", np.mean(recall_scores))
+
+    extract_rewards = [IoU_score + 2 * recall_score for IoU_score, recall_score in zip(IoU_scores, recall_scores)]
     rewards = [fr + rr for fr, rr in zip(format_rewards, extract_rewards)]
     return rewards
 
@@ -138,7 +144,7 @@ if __name__ == "__main__":
     extract_model_path = 'models/Qwen3-1.7B'
     save_model_path = f'models/HybTQA-grpo-ext'
 
-    accelerator = Accelerator()
+    # accelerator = Accelerator()
 
     dataset = load_dataset('json', data_files=train_data_path)
 
@@ -149,8 +155,8 @@ if __name__ == "__main__":
     training_args = GRPOConfig(
         output_dir=save_model_path,
         learning_rate=5e-6,
-        num_train_epochs=1,
-        per_device_train_batch_size=64,
+        num_train_epochs=2,
+        per_device_train_batch_size=32,
         max_completion_length=256,
         num_generations=8,
         max_prompt_length=768,
