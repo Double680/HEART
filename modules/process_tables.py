@@ -252,6 +252,18 @@ class TableStructure:
         extended_col_ids = list(set(extended_col_ids))
 
         return extended_row_ids, extended_col_ids
+    
+    def extract_row(self, row_id, extend=False):
+        row_ids = list(range(self.row_header_boundary))
+        row_ids += self.extend_row_headers([row_id]) if extend else [row_id]
+        col_ids = list(range(self.max_cols))
+        return self.extract_subtable(row_ids, col_ids)
+
+    def extract_col(self, col_id):
+        row_ids = list(range(self.max_rows))
+        col_ids = list(range(self.col_header_boundary)) + [col_id]
+        return self.extract_subtable(row_ids, col_ids)
+    
 
 def process_table_trees(tables, table_description):
     table_trees = []

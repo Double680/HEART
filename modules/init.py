@@ -31,8 +31,9 @@ def init_args():
     parser.add_argument("--tabform", action="store_true")  # only for dpr or gth
     parser.add_argument("--tabextract", action="store_true")  # only for dpr and tabform
     parser.add_argument("--tabextract_type", default="none", choices=["none", "raw_ext", "grpo_ext"])
-    parser.add_argument("--tabfilter", action="store_true")  # only for dpr and tabform
-    parser.add_argument("--tabfilter_type", default="none", choices=["none", "raw_fil", "grpo_fil"])
+
+    parser.add_argument("--tab_rerank", default="none", choices=["none", "raw_rerank", "grpo_rerank"])  # only for dpr and tabform
+
     parser.add_argument("--extend_header", action="store_true")  # only for raw_ext, grpo_ext
 
     parser.add_argument("--eval", action="store_true")
@@ -61,8 +62,10 @@ def init_dataset(args):
 def init_model_config(args):
     load_dotenv()
     llm_model = os.getenv("LLM_MODEL")
+    rerank_model = os.getenv("RERANK_MODEL")
     llm_config = {
         "llm_model": llm_model,
+        "rerank_model": rerank_model,
         "api_key": os.getenv('API_KEY'),
         "base_url": os.getenv('BASE_URL'),
     }
@@ -87,12 +90,10 @@ def init_model_config(args):
                     setting += f"_{args.tabextract_type}"
                     if args.extend_header:
                         setting += "_extend"
-            elif args.tabfilter:
-                setting += "_tabfilter"
-                if args.retrieve_type != "gth" and args.tabfilter_type != "none":
-                    setting += f"_{args.tabfilter_type}"
-                    if args.extend_header:
-                        setting += "_extend"
+            elif args.tab_rerank != "none" and args.retrieve_type != "gth":
+                setting += f"_{args.tab_rerank}"
+                if args.extend_header:
+                    setting += "_extend"
     save_root_setting = os.path.join(save_root_model, setting)
 
     ensure_dirs(save_root, save_root_model, save_root_setting)

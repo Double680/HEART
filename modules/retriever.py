@@ -3,6 +3,8 @@ import json
 import torch
 import torch.nn as nn
 from modules.process_tables import *
+from modules.reranker import *
+
 
 class GroundTruthRetriever:
     def __init__(self, args):
@@ -102,8 +104,10 @@ class DensePassageRetriever:
         self.tabform = args.tabform
         self.tabextract = args.tabextract
         self.tabextract_type = args.tabextract_type
-        self.tabfilter = args.tabfilter
-        self.tabfilter_type = args.tabfilter_type
+        self.tab_rerank = args.tab_rerank
+        if self.tab_rerank != "none":
+            self.reranker = Reranker(args.llm_config["rerank_model"])
+            self.reranker_lambda = 0.05
         self.extend_header = args.extend_header
         self.sim_func = nn.CosineSimilarity(dim=-1)
         self.device = "cuda"       
@@ -143,7 +147,7 @@ class DensePassageRetriever:
 
         return update_tables, retrieved_table_inds
 
-    def retrieve_tabform_table_evidence(self, sample, table_process_path, filter=False):
+    def retrieve_tabform_table_evidence(self, sample, table_process_path):
         tables = sample['tables']
         table_description = sample["table_description"]
         table_trees = process_table_trees(tables, table_description)
@@ -166,18 +170,8 @@ class DensePassageRetriever:
         subtables = {}
         for i in range(len(tables)):
             if i in process_dic:
-                if filter:
-                    row_ids = []
-                    for rid in range(table_trees[i].max_rows):
-                        if rid not in process_dic[i]["rids"]:
-                            row_ids.append(rid)
-                    col_ids = []
-                    for cid in range(table_trees[i].max_cols):
-                        if cid not in process_dic[i]["cids"]:
-                            col_ids.append(cid)
-                else:
-                    row_ids = process_dic[i]["rids"]
-                    col_ids = process_dic[i]["cids"]
+                row_ids = process_dic[i]["rids"]
+                col_ids = process_dic[i]["cids"]
 
                 row_ids, col_ids = table_trees[i].extend_header_boundary(row_ids, col_ids)
 
@@ -195,6 +189,53 @@ class DensePassageRetriever:
             result_tables.append(subtable)
 
         return result_tables, subtables
+
+    def rerank_tabform_table_evidence(self, sample):
+        tables = sample['tables']
+        table_description = sample["table_description"]
+        table_trees = process_table_trees(tables, table_description)
+        if self.tab_rerank == "raw_rerank":
+            question = sample['qa']['question']
+
+        result_tables = []
+        subtables = {}
+        for i in range(len(tables)):
+            subtables[i] = {"rids": [], "cids": []}
+            table_tree = table_trees[i]
+
+            row_floor, row_ceil = table_tree.row_header_boundary, table_tree.max_rows
+            for rid in range(row_floor, row_ceil):
+                row_evid = table_tree.extract_row(rid, extend=self.extend_header)
+                row_score = self.reranker.judge_relevance(row_evid, question)[0]
+                if row_score >= self.reranker_lambda:
+                    subtables[i]["rids"].append(rid)
+
+            col_floor, col_ceil = table_tree.col_header_boundary, table_tree.max_cols
+            for cid in range(col_floor, col_ceil):
+                col_evid = table_tree.extract_col(cid)
+                col_score = self.reranker.judge_relevance(col_evid, question)[0]
+                if col_score >= self.reranker_lambda:
+                    subtables[i]["cids"].append(cid)
+
+            row_ids = subtables[i]["rids"]
+            col_ids = subtables[i]["cids"]
+            
+            if len(row_ids) == 0 or len(col_ids) == 0:
+                subtable = 'NONE'
+            else:
+                row_ids, col_ids = table_trees[i].extend_header_boundary(row_ids, col_ids)
+
+                if self.extend_header:
+                    row_ids = table_trees[i].extend_row_headers(row_ids)
+                try:
+                    subtable = table_trees[i].extract_subtable(row_ids, col_ids)
+                except Exception:
+                    subtable = 'NONE'
+
+            result_tables.append(subtable)
+
+        return result_tables, subtables
+
 
     def retrieve(self, sample):
         uid = sample['uid']
@@ -217,9 +258,8 @@ class DensePassageRetriever:
             if self.tabextract:
                 tabextract_path = os.path.join(self.path_root, uid, f"table_ext_{self.tabextract_type}.jsonl")
                 update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, tabextract_path)
-            elif self.tabfilter:
-                tabfilter_path = os.path.join(self.path_root, uid, f"table_fil_{self.tabfilter_type}.jsonl")
-                update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, tabfilter_path, filter=True)
+            elif self.tab_rerank:
+                update_tables, retrieved_table_inds = self.rerank_tabform_table_evidence(sample)
             else:
                 update_tables = sample['tables']
                 retrieved_table_inds = None
