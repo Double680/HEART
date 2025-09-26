@@ -104,10 +104,13 @@ class DensePassageRetriever:
         self.tabform = args.tabform
         self.tabextract = args.tabextract
         self.tabextract_type = args.tabextract_type
-        self.tab_rerank = args.tab_rerank
-        if self.tab_rerank != "none":
+        self.tabrerank = args.tabrerank
+        self.tabrerank_type = args.tabrerank_type
+        if self.tabrerank:
             self.reranker = Reranker(args.llm_config["rerank_model"])
             self.reranker_lambda = 0.05
+            if self.tabrerank_type != "none":
+                self.tabrerank_query_dict = args.rerank_query_dict
         self.extend_header = args.extend_header
         self.sim_func = nn.CosineSimilarity(dim=-1)
         self.device = "cuda"       
@@ -194,8 +197,9 @@ class DensePassageRetriever:
         tables = sample['tables']
         table_description = sample["table_description"]
         table_trees = process_table_trees(tables, table_description)
-        if self.tab_rerank == "raw_rerank":
-            question = sample['qa']['question']
+        question = sample["qa"]["question"]
+        if self.tabrerank_type != "none":
+            question = self.tabrerank_query_dict[sample["uid"]]
 
         result_tables = []
         subtables = {}
@@ -258,7 +262,7 @@ class DensePassageRetriever:
             if self.tabextract:
                 tabextract_path = os.path.join(self.path_root, uid, f"table_ext_{self.tabextract_type}.jsonl")
                 update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, tabextract_path)
-            elif self.tab_rerank:
+            elif self.tabrerank:
                 update_tables, retrieved_table_inds = self.rerank_tabform_table_evidence(sample)
             else:
                 update_tables = sample['tables']
