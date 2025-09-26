@@ -3,7 +3,7 @@ import json
 import torch
 import torch.nn as nn
 from modules.process_tables import *
-from modules.reranker import *
+from augment.reranker import *
 
 
 class GroundTruthRetriever:

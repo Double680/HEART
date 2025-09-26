@@ -4,6 +4,8 @@ sys.path.append('./')
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer
 from augment.retriever import Retriever
+from augment.reranker_vllm import Reranker
+from modules.process_tables import *
 from transformers import AutoModelForCausalLM
 import torch
 import argparse
@@ -30,6 +32,70 @@ def format_reward(question):
     if len(question.split("<query>")[-1].split("</query>")[0]) > 0:
         reward += 1
     return reward
+
+def rerank_table_evidence(tables, table_description, question):
+    table_trees = process_table_trees(tables, table_description)
+
+    rerank_scores = {}
+    for i in range(len(tables)):
+        rerank_scores[i] = {"rids": {}, "cids": {}}
+        table_tree = table_trees[i]
+        question = reranker.query_format(question)
+
+        row_floor, row_ceil = table_tree.row_header_boundary, table_tree.max_rows
+        for rid in range(row_floor, row_ceil):
+            row_evid = table_tree.extract_row(rid, extend=True)
+            row_evid = reranker.doc_format(row_evid)
+            row_score = reranker.reranker.score(question, row_evid)[0].outputs.score
+            print(row_score)
+            rerank_scores[i]["rids"][rid] = row_score
+
+        col_floor, col_ceil = table_tree.col_header_boundary, table_tree.max_cols
+        for cid in range(col_floor, col_ceil):
+            col_evid = table_tree.extract_col(cid)
+            col_evid = reranker.doc_format(col_evid)
+            col_score = reranker.reranker.score(question, col_evid)[0].outputs.score
+            rerank_scores[i]["cids"][cid] = col_score
+
+    return rerank_scores
+
+def get_rerank_reward(pred_rerank_score, gth_evidence):
+    gth_reward = 0
+    gth_cnt = 0
+
+    for item in gth_evidence:
+        tid, rid, cid = item.split('-')
+        tid = int(tid); rid = int(rid); cid = int(cid)
+        gth_reward += (pred_rerank_score[tid]["rids"][rid] ** 0.5 + pred_rerank_score[tid]["cids"][cid] ** 0.5) / 2
+        gth_cnt += 1
+
+    final_reward = gth_reward / gth_cnt if gth_cnt != 0 else 1.0
+    final_reward = reward_value(final_reward)
+
+    return final_reward
+
+def reward_func_tabrerank(completions, **kwargs):
+    questions = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
+    format_rewards = [format_reward(question) for question in questions]
+    questions = [
+        question.split("<query>")[-1].split("</query>")[0].strip('\n') for question in questions
+    ]
+
+    tables = kwargs["tables"]
+    descriptions = kwargs["table_description"]
+    rerank_scores = [
+        rerank_table_evidence(table, description, question)
+        for table, description, question in zip(tables, descriptions, questions)
+    ]
+    table_evids = [kwargs["qa"][id]["table_evidence"] for id in range(len(kwargs["qa"]))]
+
+    rerank_rewards = [
+        get_rerank_reward(rerank_score, table_evid)
+        for rerank_score, table_evid in zip(rerank_scores, table_evids)
+    ]
+
+    rewards = [fr + rr for fr, rr in zip(format_rewards, rerank_rewards)]
+    return rewards
 
 def reward_func_joint(completions, **kwargs):
     questions = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
@@ -75,7 +141,7 @@ def reward_func_text(completions, **kwargs):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text'])
+    parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text', 'tabrerank'])
     parser.add_argument('--recall', action='store_true')
     args = parser.parse_args()
 
@@ -83,15 +149,13 @@ if __name__ == "__main__":
     train_data_path = 'datasets/multihiertt/train_new.json'
     retriever_model_path = 'models/Qwen3-Embedding-0.6B'
     augment_model_path = 'models/Qwen3-1.7B'
+    reranker_model_path = 'models/Qwen3-Reranker-0.6B'
     save_model_path = f'models/HybTQA-{args.aug_type}-{REWARD_TYPE}'
 
     dataset = load_dataset('json', data_files=train_data_path)
 
     dataset = dataset.map(make_conversation)
-    dataset = dataset.remove_columns(["uid", "tables"])
     dataset = dataset["train"]
-
-    retriever = Retriever(retriever_model_path)
 
     training_args = GRPOConfig(
         output_dir=save_model_path,
@@ -101,7 +165,7 @@ if __name__ == "__main__":
         max_completion_length=256,
         num_generations=8,
         max_prompt_length=128,
-        logging_steps=5,
+        logging_steps=1,
         save_steps=2000,
         report_to=None
     )
@@ -113,7 +177,17 @@ if __name__ == "__main__":
         trust_remote_code=True
     )
 
-    reward_func = reward_func_joint if args.aug_type == 'joint' else reward_func_text
+    
+    if args.aug_type == 'tabrerank':
+        reranker = Reranker(reranker_model_path)
+        reranker_lambda = 0.05
+        reward_func = reward_func_tabrerank
+    else:
+        retriever = Retriever(retriever_model_path)
+        if args.aug_type == 'joint':
+            reward_func = reward_func_joint
+        elif args.aug_type == 'text':
+            reward_func = reward_func_text
 
     trainer = GRPOTrainer(
         model=model,
