@@ -1,6 +1,7 @@
 import sys
 sys.path.append('./')
 
+from accelerate import Accelerator
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer
 from augment.retriever import Retriever
@@ -154,6 +155,8 @@ if __name__ == "__main__":
     augment_model_path = 'models/Qwen3-1.7B'
     reranker_model_path = 'models/Qwen3-Reranker-0.6B'
     save_model_path = f'models/HybTQA-{args.aug_type}-{REWARD_TYPE}'
+
+    accelerator = Accelerator()
 
     dataset = load_dataset('json', data_files=train_data_path)
 
