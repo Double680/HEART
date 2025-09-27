@@ -79,6 +79,8 @@ def call_reranker_vllm_online(query, docs, model_name="models/Qwen3-Reranker-0.6
             if response.status_code == 200:
                 result = response.json()
                 return result  # 返回生成的文本
+            else:
+                print("Bad response: ", response.status_code)
                 
         except Exception as e:
             time.sleep(2)
