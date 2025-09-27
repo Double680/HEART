@@ -39,7 +39,7 @@ import json
 import time
 
 
-def call_reranker_vllm_online(query, docs, model_name="/root/autodl-tmp/Qwen3-Reranker-0.6B", host="localhost", port=8000):
+def call_reranker_vllm_online(query, docs, model_name="models/Qwen3-Reranker-0.6B", host="localhost", port=8000):
     url = f"http://{host}:{port}/rerank"
 
     prefix = '<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be "yes" or "no".<|im_end|>\n<|im_start|>user\n'
