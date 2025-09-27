@@ -70,7 +70,15 @@ def get_rerank_reward(pred_rerank_score, gth_evidence):
     for item in gth_evidence:
         tid, rid, cid = item.split('-')
         tid = int(tid); rid = int(rid); cid = int(cid)
-        gth_reward += (pred_rerank_score[tid]["rids"][rid] ** 0.5 + pred_rerank_score[tid]["cids"][cid] ** 0.5) / 2
+        try:
+            gth_reward += pred_rerank_score[tid]["rids"][rid] ** 0.5
+        except Exception:
+            gth_reward += 1
+        try:
+            gth_reward += pred_rerank_score[tid]["cids"][cid] ** 0.5
+        except Exception:
+            gth_reward += 1
+        gth_reward /= 2
         gth_cnt += 1
 
     final_reward = gth_reward / gth_cnt if gth_cnt != 0 else 1.0
