@@ -4,7 +4,7 @@ sys.path.append('./')
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer
 from augment.retriever import Retriever
-from augment.reranker_vllm import Reranker
+from augment.reranker_vllm import *
 from modules.process_tables import *
 from transformers import AutoModelForCausalLM
 import torch
@@ -40,21 +40,25 @@ def rerank_table_evidence(tables, table_description, question):
     for i in range(len(tables)):
         rerank_scores[i] = {"rids": {}, "cids": {}}
         table_tree = table_trees[i]
-        question = reranker.query_format(question)
 
         row_floor, row_ceil = table_tree.row_header_boundary, table_tree.max_rows
+        row_evids = []
         for rid in range(row_floor, row_ceil):
             row_evid = table_tree.extract_row(rid, extend=True)
-            row_evid = reranker.doc_format(row_evid)
-            row_score = reranker.reranker.score(question, row_evid, use_tqdm=False)[0].outputs.score
-            rerank_scores[i]["rids"][rid] = row_score
+            row_evids.append(row_evid)
+        row_scores = call_reranker_vllm_online(question, row_evids)["results"]
+        for rid in range(row_floor, row_ceil):
+            rerank_scores[i]["rids"][rid] = row_scores[rid - row_floor]["relevance_score"]
 
+        col_evids = []
         col_floor, col_ceil = table_tree.col_header_boundary, table_tree.max_cols
         for cid in range(col_floor, col_ceil):
             col_evid = table_tree.extract_col(cid)
-            col_evid = reranker.doc_format(col_evid)
-            col_score = reranker.reranker.score(question, col_evid, use_tqdm=False)[0].outputs.score
-            rerank_scores[i]["cids"][cid] = col_score
+            col_evids.append(col_evid)
+
+        col_scores = call_reranker_vllm_online(question, col_evids)["results"]
+        for cid in range(col_floor, col_ceil):
+            rerank_scores[i]["cids"][cid] = col_scores[cid - col_floor]["relevance_score"]
 
     return rerank_scores
 
@@ -172,13 +176,13 @@ if __name__ == "__main__":
     model = AutoModelForCausalLM.from_pretrained(
         "models/Qwen3-1.7B",
         torch_dtype=torch.bfloat16,
-        device_map="auto",
+        # device_map="auto",
         trust_remote_code=True
     )
 
     
     if args.aug_type == 'tabrerank':
-        reranker = Reranker(reranker_model_path)
+        # reranker = Reranker(reranker_model_path)
         reranker_lambda = 0.05
         reward_func = reward_func_tabrerank
     else:
