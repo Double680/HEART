@@ -32,7 +32,7 @@ def init_args():
     parser.add_argument("--tabextract", action="store_true")  # only for dpr and tabform
     parser.add_argument("--tabextract_type", default="none", choices=["none", "raw_ext", "grpo_ext"])
     parser.add_argument("--tabrerank", action="store_true")  # only for dpr and tabform
-    parser.add_argument("--tabrerank_type", default="none", choices=["none", "raw", "grpo"])  # only for dpr and tabform
+    parser.add_argument("--tabrerank_type", default="none", choices=["none", "raw", "tabrerank"])  # only for dpr and tabform
 
     parser.add_argument("--extend_header", action="store_true")  # only for raw_ext, grpo_ext
 

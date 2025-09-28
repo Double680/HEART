@@ -51,9 +51,9 @@ def rerank_table_evidence(tables, table_description, question):
             row_scores = call_reranker_vllm_online(question, row_evids)["results"]
         for rid in range(row_floor, row_ceil):
             rerank_scores[i]["rids"][rid] = row_scores[rid - row_floor]["relevance_score"]
-
-        col_evids = []
+ 
         col_floor, col_ceil = table_tree.col_header_boundary, table_tree.max_cols
+        col_evids = []
         for cid in range(col_floor, col_ceil):
             col_evid = table_tree.extract_col(cid)
             col_evids.append(col_evid)
@@ -171,6 +171,7 @@ if __name__ == "__main__":
 
     dataset = dataset.map(make_conversation)
     dataset = dataset["train"]
+    dataset = dataset.shuffle(seed=42)
 
     training_args = GRPOConfig(
         output_dir=save_model_path,

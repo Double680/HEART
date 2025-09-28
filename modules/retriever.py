@@ -3,7 +3,8 @@ import json
 import torch
 import torch.nn as nn
 from modules.process_tables import *
-from augment.reranker import *
+# from augment.reranker import *
+from augment.reranker_vllm import *
 
 
 class GroundTruthRetriever:
@@ -107,10 +108,11 @@ class DensePassageRetriever:
         self.tabrerank = args.tabrerank
         self.tabrerank_type = args.tabrerank_type
         if self.tabrerank:
-            self.reranker = Reranker(args.llm_config["rerank_model"])
+            # self.reranker = Reranker(args.llm_config["rerank_model"])
             self.reranker_lambda = 0.05
             if self.tabrerank_type != "none":
                 self.tabrerank_query_dict = args.rerank_query_dict
+            self.reranker_model_path = args.llm_config["rerank_model"]
         self.extend_header = args.extend_header
         self.sim_func = nn.CosineSimilarity(dim=-1)
         self.device = "cuda"       
@@ -208,17 +210,24 @@ class DensePassageRetriever:
             table_tree = table_trees[i]
 
             row_floor, row_ceil = table_tree.row_header_boundary, table_tree.max_rows
+            row_evids = []
             for rid in range(row_floor, row_ceil):
                 row_evid = table_tree.extract_row(rid, extend=self.extend_header)
-                row_score = self.reranker.judge_relevance(row_evid, question)[0]
-                if row_score >= self.reranker_lambda:
+                row_evids.append(row_evid)
+            if len(row_evids):
+                row_scores = call_reranker_vllm_online(question, row_evids, self.reranker_model_path)["results"]
+            for rid in range(row_floor, row_ceil):
+                if row_scores[rid - row_floor]["relevance_score"] >= self.reranker_lambda:
                     subtables[i]["rids"].append(rid)
 
             col_floor, col_ceil = table_tree.col_header_boundary, table_tree.max_cols
+            col_evids = []
             for cid in range(col_floor, col_ceil):
                 col_evid = table_tree.extract_col(cid)
-                col_score = self.reranker.judge_relevance(col_evid, question)[0]
-                if col_score >= self.reranker_lambda:
+                col_evids.append(col_evid)
+            if len(col_evids):
+                col_scores = call_reranker_vllm_online(question, col_evid, self.reranker_model_path)["results"][0]
+                if col_scores[cid - col_floor]["relevance_score"] >= self.reranker_lambda:
                     subtables[i]["cids"].append(cid)
 
             row_ids = subtables[i]["rids"]
