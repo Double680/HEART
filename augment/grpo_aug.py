@@ -133,58 +133,58 @@ def reward_func_overall_tabrerank(completions, **kwargs):
     table_evids = [kwargs["qa"][id]["table_evidence"] for id in range(len(kwargs["qa"]))]
 
     rerank_rewards = [
-        get_rerank_overall_reward(rerank_score, table_evid)
+        get_rerank_overall_reward(rerank_score, table_evid, alpha, beta)
         for rerank_score, table_evid in zip(rerank_scores, table_evids)
     ]
 
     rewards = [fr + rr for fr, rr in zip(format_rewards, rerank_rewards)]
     return rewards
 
-def get_rerank_reward(pred_rerank_score, gth_evidence):
-    gth_reward = 0
-    gth_cnt = 0
+# def get_rerank_reward(pred_rerank_score, gth_evidence):
+#     gth_reward = 0
+#     gth_cnt = 0
 
-    for item in gth_evidence:
-        tid, rid, cid = item.split('-')
-        tid = int(tid); rid = int(rid); cid = int(cid)
-        try:
-            gth_reward += pred_rerank_score[tid]["rids"][rid] ** 0.5
-        except Exception:
-            gth_reward += 1
-        try:
-            gth_reward += pred_rerank_score[tid]["cids"][cid] ** 0.5
-        except Exception:
-            gth_reward += 1
-        gth_reward /= 2
-        gth_cnt += 1
+#     for item in gth_evidence:
+#         tid, rid, cid = item.split('-')
+#         tid = int(tid); rid = int(rid); cid = int(cid)
+#         try:
+#             gth_reward += pred_rerank_score[tid]["rids"][rid] ** 0.5
+#         except Exception:
+#             gth_reward += 1
+#         try:
+#             gth_reward += pred_rerank_score[tid]["cids"][cid] ** 0.5
+#         except Exception:
+#             gth_reward += 1
+#         gth_reward /= 2
+#         gth_cnt += 1
 
-    final_reward = gth_reward / gth_cnt if gth_cnt != 0 else 1.0
-    final_reward = reward_value(final_reward)
+#     final_reward = gth_reward / gth_cnt if gth_cnt != 0 else 1.0
+#     final_reward = reward_value(final_reward)
 
-    return final_reward
+#     return final_reward
 
-def reward_func_tabrerank(completions, **kwargs):
-    questions = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
-    format_rewards = [format_reward(question) for question in questions]
-    questions = [
-        question.split("<query>")[-1].split("</query>")[0].strip('\n') for question in questions
-    ]
+# def reward_func_tabrerank(completions, **kwargs):
+#     questions = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
+#     format_rewards = [format_reward(question) for question in questions]
+#     questions = [
+#         question.split("<query>")[-1].split("</query>")[0].strip('\n') for question in questions
+#     ]
 
-    tables = kwargs["tables"]
-    descriptions = kwargs["table_description"]
-    rerank_scores = [
-        rerank_table_evidence(table, description, question)
-        for table, description, question in zip(tables, descriptions, questions)
-    ]
-    table_evids = [kwargs["qa"][id]["table_evidence"] for id in range(len(kwargs["qa"]))]
+#     tables = kwargs["tables"]
+#     descriptions = kwargs["table_description"]
+#     rerank_scores = [
+#         rerank_table_evidence(table, description, question)
+#         for table, description, question in zip(tables, descriptions, questions)
+#     ]
+#     table_evids = [kwargs["qa"][id]["table_evidence"] for id in range(len(kwargs["qa"]))]
 
-    rerank_rewards = [
-        get_rerank_reward(rerank_score, table_evid)
-        for rerank_score, table_evid in zip(rerank_scores, table_evids)
-    ]
+#     rerank_rewards = [
+#         get_rerank_reward(rerank_score, table_evid)
+#         for rerank_score, table_evid in zip(rerank_scores, table_evids)
+#     ]
 
-    rewards = [fr + rr for fr, rr in zip(format_rewards, rerank_rewards)]
-    return rewards
+#     rewards = [fr + rr for fr, rr in zip(format_rewards, rerank_rewards)]
+#     return rewards
 
 def reward_func_joint(completions, **kwargs):
     questions = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
@@ -232,7 +232,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text', 'tabrerank'])
     parser.add_argument('--recall', action='store_true')
-    parser.add_argument('--overall', action='store_true')
+    parser.add_argument('--alpha', type=float, default=2)
+    parser.add_argument('--beta', type=float, default=0.5)
     args = parser.parse_args()
 
     REWARD_TYPE = 1 if args.recall else 2
@@ -272,14 +273,11 @@ if __name__ == "__main__":
         trust_remote_code=True
     )
 
-    
     if args.aug_type == 'tabrerank':
-        # reranker = Reranker(reranker_model_path)
         reranker_lambda = 0.05
-        if args.overall:
-            reward_func = reward_func_overall_tabrerank
-        else:
-            reward_func = reward_func_tabrerank
+        alpha = args.alpha
+        beta = args.beta
+        reward_func = reward_func_overall_tabrerank
     else:
         retriever = Retriever(retriever_model_path)
         if args.aug_type == 'joint':
