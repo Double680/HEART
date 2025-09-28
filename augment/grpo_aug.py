@@ -64,36 +64,56 @@ def rerank_table_evidence(tables, table_description, question):
 
     return rerank_scores
 
-def get_rerank_overall_reward(pred_rerank_score, gth_evidence):
+def get_rerank_overall_reward(pred_rerank_score, gth_evidence, alpha=2, beta=0.5):
     gth_rerank = {}
+    gth_unhit_num = {"row": 0, "col": 0}
+    gth_cnt = len(gth_evidence)
     for item in gth_evidence:
         tid, rid, cid = item.split('-')
         tid = int(tid); rid = int(rid); cid = int(cid)
         if tid not in gth_rerank:
-            gth_rerank[tid] = {"rids": [], "cids": []}
-        gth_rerank[tid]["rids"].append(rid)
-        gth_rerank[tid]["cids"].append(cid)
+            gth_rerank[tid] = {"rids": {}, "cids": {}}
+            if rid not in gth_rerank[tid]["rids"]:
+                gth_rerank[tid]["rids"][rid] = 0
+                gth_unhit_num["row"] -= 1
+            gth_rerank[tid]["rids"][rid] += 1
+            if cid not in gth_rerank[tid]["cids"]:
+                gth_rerank[tid]["cids"][cid] = 1
+                gth_unhit_num["col"] -= 1
+            gth_rerank[tid]["cids"][cid] += 1
 
-    all_cnt = 0
+    for tid in pred_rerank_score:
+        tid_scores = pred_rerank_score[tid]
+        gth_unhit_num["row"] += len(tid_scores["rids"])
+        gth_unhit_num["col"] += len(tid_scores["cids"])
+
     item_reward = 0
     for tid in pred_rerank_score:
         tid_scores = pred_rerank_score[tid]
         for rid in tid_scores["rids"]:
-            all_cnt += 1
+            relevance = pred_rerank_score[tid]["rids"][rid] - reranker_lambda
             if tid in gth_rerank and rid in gth_rerank[tid]["rids"]:
-                item_reward += pred_rerank_score[tid]["rids"][rid] ** 0.5
+                if relevance > 0:
+                    item_reward += alpha * gth_rerank[tid]["rids"][rid] / gth_cnt if gth_cnt else 0
             else:
-                item_reward -= pred_rerank_score[tid]["rids"][rid] ** 4
+                if relevance < 0:
+                    item_reward += beta / gth_unhit_num["row"] if gth_unhit_num["row"] else 0
         for cid in tid_scores["cids"]:
-            all_cnt += 1
-            if tid in gth_rerank and rid in gth_rerank[tid]["cids"]:
-                item_reward += pred_rerank_score[tid]["cids"][cid] ** 0.5
+            relevance = pred_rerank_score[tid]["cids"][cid] - reranker_lambda
+            if tid in gth_rerank and cid in gth_rerank[tid]["cids"]:
+                if relevance > 0:
+                    item_reward += alpha * gth_rerank[tid]["cids"][cid] / gth_cnt if gth_cnt else 0
             else:
-                item_reward -= pred_rerank_score[tid]["rids"][rid] ** 4
-        tid = int(tid); rid = int(rid); cid = int(cid)
+                if relevance < 0:
+                    item_reward += beta / gth_unhit_num["col"] if gth_unhit_num["col"] else 0
 
-    final_reward = item_reward / all_cnt
-    final_reward = reward_value(final_reward)
+    if gth_cnt == 0:
+        item_reward += alpha * 2
+    if gth_unhit_num["row"] == 0:
+        item_reward += beta
+    if gth_unhit_num["col"] == 0:
+        item_reward += beta
+    final_reward = item_reward
 
     return final_reward
 
