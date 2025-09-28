@@ -75,23 +75,24 @@ def get_rerank_overall_reward(pred_rerank_score, gth_evidence):
         gth_rerank[tid]["cids"].append(cid)
 
     all_cnt = 0
+    item_reward = 0
     for tid in pred_rerank_score:
         tid_scores = pred_rerank_score[tid]
         for rid in tid_scores["rids"]:
             all_cnt += 1
             if tid in gth_rerank and rid in gth_rerank[tid]["rids"]:
-                gth_reward += pred_rerank_score[tid]["rids"][rid] ** 0.5
+                item_reward += pred_rerank_score[tid]["rids"][rid] ** 0.5
             else:
-                gth_reward -= pred_rerank_score[tid]["rids"][rid] ** 4
+                item_reward -= pred_rerank_score[tid]["rids"][rid] ** 4
         for cid in tid_scores["cids"]:
             all_cnt += 1
             if tid in gth_rerank and rid in gth_rerank[tid]["cids"]:
-                gth_reward += pred_rerank_score[tid]["cids"][cid] ** 0.5
+                item_reward += pred_rerank_score[tid]["cids"][cid] ** 0.5
             else:
-                gth_reward -= pred_rerank_score[tid]["rids"][rid] ** 4
+                item_reward -= pred_rerank_score[tid]["rids"][rid] ** 4
         tid = int(tid); rid = int(rid); cid = int(cid)
 
-    final_reward = gth_reward / all_cnt
+    final_reward = item_reward / all_cnt
     final_reward = reward_value(final_reward)
 
     return final_reward
