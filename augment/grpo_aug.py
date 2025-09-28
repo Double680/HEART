@@ -241,9 +241,7 @@ if __name__ == "__main__":
     retriever_model_path = 'models/Qwen3-Embedding-0.6B'
     augment_model_path = 'models/Qwen3-1.7B'
     reranker_model_path = 'models/Qwen3-Reranker-0.6B'
-    save_model_path = f'models/HybTQA-{args.aug_type}-{REWARD_TYPE}'
-    if args.overall:
-        save_model_path += "-all"
+    save_model_path = f'models/HybTQA-{args.aug_type}-{REWARD_TYPE}-{args.alpha}-{args.beta}'
 
     accelerator = Accelerator()
 
