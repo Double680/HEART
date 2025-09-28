@@ -55,8 +55,7 @@ class ThinkAgent:
 
     def preprocess(self, sample):
 
-        id, uid = sample['id'], sample['uid']
-        save_result_path = os.path.join(self.result_path, f'{id}.json')
+        uid = sample['id'], sample['uid']
 
         text_inds, table_inds = None, None
         if self.retriever != None:
@@ -67,13 +66,16 @@ class ThinkAgent:
         document, question = processed_sample['document'], processed_sample['question']
         prompt = query_message.replace('<DOCUMENT>', document).replace('<QUESTION>', question)
 
-        return uid, prompt, save_result_path, text_inds, table_inds
+        return uid, prompt, text_inds, table_inds
 
 
     async def query(self, sample):
-        uid, prompt, path, text_inds, table_inds = self.preprocess(sample)
+        id = sample['id']
+        path = os.path.join(self.result_path, f'{id}.json')
         if os.path.exists(path):
             return
+        
+        uid, prompt, text_inds, table_inds = self.preprocess(sample)
         
         messages = [{"role": "user", "content": prompt}]
         reasoning_content = None

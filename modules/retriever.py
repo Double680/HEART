@@ -226,7 +226,8 @@ class DensePassageRetriever:
                 col_evid = table_tree.extract_col(cid)
                 col_evids.append(col_evid)
             if len(col_evids):
-                col_scores = call_reranker_vllm_online(question, col_evid, self.reranker_model_path)["results"][0]
+                col_scores = call_reranker_vllm_online(question, col_evids, self.reranker_model_path)["results"]
+            for cid in range(col_floor, col_ceil):
                 if col_scores[cid - col_floor]["relevance_score"] >= self.reranker_lambda:
                     subtables[i]["cids"].append(cid)
 
