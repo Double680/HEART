@@ -64,6 +64,61 @@ def rerank_table_evidence(tables, table_description, question):
 
     return rerank_scores
 
+def get_rerank_overall_reward(pred_rerank_score, gth_evidence):
+    gth_rerank = {}
+    for item in gth_evidence:
+        tid, rid, cid = item.split('-')
+        tid = int(tid); rid = int(rid); cid = int(cid)
+        if tid not in gth_rerank:
+            gth_rerank[tid] = {"rids": [], "cids": []}
+        gth_rerank[tid]["rids"].append(rid)
+        gth_rerank[tid]["cids"].append(cid)
+
+    all_cnt = 0
+    for tid in pred_rerank_score:
+        tid_scores = pred_rerank_score[tid]
+        for rid in tid_scores["rids"]:
+            all_cnt += 1
+            if tid in gth_rerank and rid in gth_rerank[tid]["rids"]:
+                gth_reward += pred_rerank_score[tid]["rids"][rid] ** 0.5
+            else:
+                gth_reward -= pred_rerank_score[tid]["rids"][rid] ** 4
+        for cid in tid_scores["cids"]:
+            all_cnt += 1
+            if tid in gth_rerank and rid in gth_rerank[tid]["cids"]:
+                gth_reward += pred_rerank_score[tid]["cids"][cid] ** 0.5
+            else:
+                gth_reward -= pred_rerank_score[tid]["rids"][rid] ** 4
+        tid = int(tid); rid = int(rid); cid = int(cid)
+
+    final_reward = gth_reward / all_cnt
+    final_reward = reward_value(final_reward)
+
+    return final_reward
+
+def reward_func_overall_tabrerank(completions, **kwargs):
+    questions = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
+    format_rewards = [format_reward(question) for question in questions]
+    questions = [
+        question.split("<query>")[-1].split("</query>")[0].strip('\n') for question in questions
+    ]
+
+    tables = kwargs["tables"]
+    descriptions = kwargs["table_description"]
+    rerank_scores = [
+        rerank_table_evidence(table, description, question)
+        for table, description, question in zip(tables, descriptions, questions)
+    ]
+    table_evids = [kwargs["qa"][id]["table_evidence"] for id in range(len(kwargs["qa"]))]
+
+    rerank_rewards = [
+        get_rerank_overall_reward(rerank_score, table_evid)
+        for rerank_score, table_evid in zip(rerank_scores, table_evids)
+    ]
+
+    rewards = [fr + rr for fr, rr in zip(format_rewards, rerank_rewards)]
+    return rewards
+
 def get_rerank_reward(pred_rerank_score, gth_evidence):
     gth_reward = 0
     gth_cnt = 0
@@ -156,6 +211,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text', 'tabrerank'])
     parser.add_argument('--recall', action='store_true')
+    parser.add_argument('--overall', action='store_true')
     args = parser.parse_args()
 
     REWARD_TYPE = 1 if args.recall else 2
@@ -164,6 +220,8 @@ if __name__ == "__main__":
     augment_model_path = 'models/Qwen3-1.7B'
     reranker_model_path = 'models/Qwen3-Reranker-0.6B'
     save_model_path = f'models/HybTQA-{args.aug_type}-{REWARD_TYPE}'
+    if args.overall:
+        save_model_path += "-all"
 
     accelerator = Accelerator()
 
@@ -181,7 +239,7 @@ if __name__ == "__main__":
         max_completion_length=256,
         num_generations=8,
         max_prompt_length=128,
-        logging_steps=1,
+        logging_steps=5,
         save_steps=2000,
         report_to=None
     )
@@ -197,7 +255,10 @@ if __name__ == "__main__":
     if args.aug_type == 'tabrerank':
         # reranker = Reranker(reranker_model_path)
         reranker_lambda = 0.05
-        reward_func = reward_func_tabrerank
+        if args.overall:
+            reward_func = reward_func_overall_tabrerank
+        else:
+            reward_func = reward_func_tabrerank
     else:
         retriever = Retriever(retriever_model_path)
         if args.aug_type == 'joint':
