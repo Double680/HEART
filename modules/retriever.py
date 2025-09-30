@@ -216,6 +216,7 @@ class DensePassageRetriever:
                 row_evids.append(row_evid)
             if len(row_evids):
                 row_scores = call_reranker_vllm_online(question, row_evids, self.reranker_model_path)["results"]
+                row_scores.sort(key=lambda x: x['index'])
             for rid in range(row_floor, row_ceil):
                 if row_scores[rid - row_floor]["relevance_score"] >= self.reranker_lambda:
                     subtables[i]["rids"].append(rid)
@@ -227,6 +228,7 @@ class DensePassageRetriever:
                 col_evids.append(col_evid)
             if len(col_evids):
                 col_scores = call_reranker_vllm_online(question, col_evids, self.reranker_model_path)["results"]
+                col_scores.sort(key=lambda x: x['index'])
             for cid in range(col_floor, col_ceil):
                 if col_scores[cid - col_floor]["relevance_score"] >= self.reranker_lambda:
                     subtables[i]["cids"].append(cid)

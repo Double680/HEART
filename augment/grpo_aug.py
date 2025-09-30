@@ -49,6 +49,7 @@ def rerank_table_evidence(tables, table_description, question):
             row_evids.append(row_evid)
         if len(row_evids):
             row_scores = call_reranker_vllm_online(question, row_evids)["results"]
+            row_scores.sort(key=lambda x: x['index'])
         for rid in range(row_floor, row_ceil):
             rerank_scores[i]["rids"][rid] = row_scores[rid - row_floor]["relevance_score"]
  
@@ -59,6 +60,7 @@ def rerank_table_evidence(tables, table_description, question):
             col_evids.append(col_evid)
         if len(col_evids):
             col_scores = call_reranker_vllm_online(question, col_evids)["results"]
+            col_scores.sort(key=lambda x: x['index'])
         for cid in range(col_floor, col_ceil):
             rerank_scores[i]["cids"][cid] = col_scores[cid - col_floor]["relevance_score"]
 
