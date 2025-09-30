@@ -66,6 +66,11 @@ def rerank_table_evidence(tables, table_description, question):
 
     return rerank_scores
 
+def clip(x, lower=-0.05, upper=0.1, scale=10):
+    clip_value = max(lower, min(x, upper))
+    clip_norm_value = clip_value * scale
+    return clip_norm_value
+
 def get_rerank_overall_reward(pred_rerank_score, gth_evidence, alpha=2, beta=0.5):
     gth_rerank = {}
     gth_unhit_num = {"row": 0, "col": 0}
@@ -95,11 +100,9 @@ def get_rerank_overall_reward(pred_rerank_score, gth_evidence, alpha=2, beta=0.5
         for rid in tid_scores["rids"]:
             relevance = pred_rerank_score[tid]["rids"][rid] - reranker_lambda
             if tid in gth_rerank and rid in gth_rerank[tid]["rids"]:
-                if relevance > 0:
-                    item_reward += alpha * gth_rerank[tid]["rids"][rid] / gth_cnt if gth_cnt else 0
+                item_reward += alpha * clip(relevance) * gth_rerank[tid]["rids"][rid] / gth_cnt if gth_cnt else 0
             else:
-                if relevance < 0:
-                    item_reward += beta / gth_unhit_num["row"] if gth_unhit_num["row"] else 0
+                item_reward -= beta * clip(relevance) / gth_unhit_num["row"] if gth_unhit_num["row"] else 0
         for cid in tid_scores["cids"]:
             relevance = pred_rerank_score[tid]["cids"][cid] - reranker_lambda
             if tid in gth_rerank and cid in gth_rerank[tid]["cids"]:
