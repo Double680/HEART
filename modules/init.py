@@ -33,6 +33,7 @@ def init_args():
     parser.add_argument("--tabextract_type", default="none", choices=["none", "raw_ext", "grpo_ext"])
     parser.add_argument("--tabrerank", action="store_true")  # only for dpr and tabform
     parser.add_argument("--tabrerank_type", default="none", choices=["none", "raw", "tabrerank"])  # only for dpr and tabform
+    parser.add_argument("--tabrerank_lambda", default=0.1, type=float)  # only for dpr and tabform
 
     parser.add_argument("--extend_header", action="store_true")  # only for raw_ext, grpo_ext
 
@@ -99,6 +100,7 @@ def init_model_config(args):
                         setting += "_extend"
             elif args.tabrerank:
                 setting += "_tabrerank"
+                setting += f"_lambda{args.tabrerank_lambda}"
                 if args.retrieve_type != "gth" and args.tabrerank_type != "none":
                     setting += f"_{args.tabrerank_type}"
                     if args.extend_header:

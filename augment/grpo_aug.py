@@ -235,7 +235,7 @@ if __name__ == "__main__":
     parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text', 'tabrerank'])
     parser.add_argument('--recall', action='store_true')
     parser.add_argument('--alpha', type=float, default=2)
-    parser.add_argument('--beta', type=float, default=0.5)
+    parser.add_argument('--beta', type=float, default=1)
     args = parser.parse_args()
 
     REWARD_TYPE = 1 if args.recall else 2
@@ -274,7 +274,7 @@ if __name__ == "__main__":
     )
 
     if args.aug_type == 'tabrerank':
-        reranker_lambda = 0.05
+        reranker_lambda = 0.1
         alpha = args.alpha
         beta = args.beta
         reward_func = reward_func_overall_tabrerank

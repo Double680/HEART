@@ -109,7 +109,7 @@ class DensePassageRetriever:
         self.tabrerank_type = args.tabrerank_type
         if self.tabrerank:
             # self.reranker = Reranker(args.llm_config["rerank_model"])
-            self.reranker_lambda = 0.05
+            self.reranker_lambda = args.tabrerank_lambda
             if self.tabrerank_type != "none":
                 self.tabrerank_query_dict = args.rerank_query_dict
             self.reranker_model_path = args.llm_config["rerank_model"]
