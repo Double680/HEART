@@ -106,11 +106,9 @@ def get_rerank_overall_reward(pred_rerank_score, gth_evidence, alpha=2, beta=0.5
         for cid in tid_scores["cids"]:
             relevance = pred_rerank_score[tid]["cids"][cid] - reranker_lambda
             if tid in gth_rerank and cid in gth_rerank[tid]["cids"]:
-                if relevance > 0:
-                    item_reward += alpha * gth_rerank[tid]["cids"][cid] / gth_cnt if gth_cnt else 0
+                item_reward += alpha * clip(relevance) * gth_rerank[tid]["cids"][cid] / gth_cnt if gth_cnt else 0
             else:
-                if relevance < 0:
-                    item_reward += beta / gth_unhit_num["col"] if gth_unhit_num["col"] else 0
+                item_reward -= beta * clip(relevance) / gth_unhit_num["col"] if gth_unhit_num["col"] else 0
 
     if gth_cnt == 0:
         item_reward += alpha * 2
