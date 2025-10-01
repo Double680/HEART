@@ -102,6 +102,7 @@ class DensePassageRetriever:
         self.path_root = args.stored_embs_path
         self.aug = args.query_aug
         self.top_k = args.top_k
+        self.top_p = args.top_p
         self.tabform = args.tabform
         self.tabextract = args.tabextract
         self.tabextract_type = args.tabextract_type
@@ -142,7 +143,10 @@ class DensePassageRetriever:
         table_desc = sample['table_description']
         table_desc_st = [(int(key.split('-')[0]), table_desc[key]) for key in table_desc]
         table_scores = self.sim_func(question_emb, table_st_embs)
-        retrieved_table_inds = torch.topk(table_scores, k=min(self.top_k, len(table_scores))).indices.tolist()
+        if self.top_p == 0:
+            retrieved_table_inds = torch.topk(table_scores, k=min(self.top_k, len(table_scores))).indices.tolist()
+        else:
+            retrieved_table_inds = torch.where(table_scores >= self.top_p)[0].tolist()
         update_table_inds = sorted(retrieved_table_inds)
         update_table_desc = [table_desc_st[ind] for ind in update_table_inds]
         update_table_dict = {i: [] for i in range(len(tables))}

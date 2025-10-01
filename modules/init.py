@@ -26,6 +26,7 @@ def init_args():
     parser.add_argument("--retrieve_type", default="none", choices=["none", "dpr", "gth"])
 
     parser.add_argument("--top_k", default=10, type=int)  # only for dpr
+    parser.add_argument("--top_p", default=0, type=float)  # only for dpr, if top_p > 0, use top_p to filter tables
     parser.add_argument("--query_aug", default="none", choices=["none", "raw_aug", "text_aug", "grpo_aug"])  # only for dpr
     parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
     parser.add_argument("--tabform", action="store_true")  # only for dpr or gth
@@ -88,6 +89,8 @@ def init_model_config(args):
         setting = args.retrieve_type
         if args.retrieve_type == "dpr":
             setting += f"_top{args.top_k}"
+            if args.top_p > 0:
+                setting += f"_p{args.top_p}"
             if args.query_aug != "none":
                 setting += f"_{args.query_aug}"
         if args.tabform:
