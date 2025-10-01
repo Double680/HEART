@@ -48,7 +48,7 @@ def process_text_scores(questions, **kwargs):
 
 def process_table_scores(questions, **kwargs):
     table_docs = kwargs["table_description"]
-    table_evids = [kwargs["qa"][id]["table_evidence"] for id in range(len(kwargs["qa"]))]
+    table_evids = [kwargs["qa"][id]["table_evidence_id"] for id in range(len(kwargs["qa"]))]
     table_scores = [
         retriever.eval(retriever.retrieve(question, table_doc), table_evid)[REWARD_TYPE] 
         for question, table_doc, table_evid in zip(questions, table_docs, table_evids)
@@ -72,6 +72,9 @@ def reward_func(completions, **kwargs):
     else:
         text_scores = process_text_scores(questions, **kwargs)
         table_scores = process_table_scores(questions, **kwargs)
+
+    import pdb
+    pdb.set_trace()
 
     retrieve_rewards = [
         reward_value(text_score) + reward_value(table_score)
