@@ -17,9 +17,6 @@ def process_output(args, left, right):
         if args.dev:
             gold = args.samples[j]['qa']['answer']
             result['gold'] = gold
-            # results.append({'uid': uid, 'pred': pred, 'gold': gold})            
-        # else:
-            # results.append({'uid': uid, 'predicted_ans': pred, 'predicted_program': []})
         with open(os.path.join(save_root, f'{j}.json'), 'w') as file:
             file.write(json.dumps(result, indent=2))
 

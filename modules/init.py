@@ -30,11 +30,6 @@ def init_args():
     parser.add_argument("--query_aug", default="none", choices=["none", "raw_aug", "text_aug", "grpo_aug"])  # only for dpr
     parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
     parser.add_argument("--tabform", action="store_true")  # only for dpr or gth
-    parser.add_argument("--tabextract", action="store_true")  # only for dpr and tabform
-    parser.add_argument("--tabextract_type", default="none", choices=["none", "raw_ext", "grpo_ext"])
-    parser.add_argument("--tabrerank", action="store_true")  # only for dpr and tabform
-    parser.add_argument("--tabrerank_type", default="none", choices=["none", "raw", "tabrerank"])  # only for dpr and tabform
-    parser.add_argument("--tabrerank_lambda", default=0.1, type=float)  # only for dpr and tabform
 
     parser.add_argument("--extend_header", action="store_true")  # only for raw_ext, grpo_ext
 
@@ -57,13 +52,6 @@ def init_dataset(args):
             samples[i]["id"] = i
     if args.end == -1:
         args.end = len(samples)
-
-    if args.tabrerank and args.tabrerank_type != "none":
-        rerank_query_file = os.path.join(data_root, f"{data_type}_{args.tabrerank_type}_aug.jsonl")
-        with open(rerank_query_file, "r") as f:
-            rerank_queries = [json.loads(line) for line in f.readlines()]
-        rerank_query_dict = {item["uid"]: item["new_query"] for item in rerank_queries}
-        args.rerank_query_dict = rerank_query_dict
 
     args.samples = samples
 
@@ -95,19 +83,7 @@ def init_model_config(args):
                 setting += f"_{args.query_aug}"
         if args.tabform:
             setting += "_tabform"
-            if args.tabextract:
-                setting += "_tabextract"
-                if args.retrieve_type != "gth" and args.tabextract_type != "none":
-                    setting += f"_{args.tabextract_type}"
-                    if args.extend_header:
-                        setting += "_extend"
-            elif args.tabrerank:
-                setting += "_tabrerank"
-                setting += f"_lambda{args.tabrerank_lambda}"
-                if args.retrieve_type != "gth" and args.tabrerank_type != "none":
-                    setting += f"_{args.tabrerank_type}"
-                    if args.extend_header:
-                        setting += "_extend"
+
     save_root_setting = os.path.join(save_root_model, setting)
 
     ensure_dirs(save_root, save_root_model, save_root_setting)

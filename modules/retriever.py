@@ -3,14 +3,11 @@ import json
 import torch
 import torch.nn as nn
 from modules.process_tables import *
-# from augment.reranker import *
-from augment.reranker_vllm import *
 
 
 class GroundTruthRetriever:
     def __init__(self, args):
         self.tabform = args.tabform
-        self.tabextract = args.tabextract
 
     def get_tabform_table_gth(self, sample):
         tables = sample['tables']
@@ -74,10 +71,7 @@ class GroundTruthRetriever:
         update_texts = [paragraphs[ind] for ind in update_text_inds]
 
         if self.tabform:
-            if self.tabextract:
-                update_tables = self.get_tabform_table_gth(sample)
-            else:
-                update_tables = sample['tables']
+            update_tables = self.get_tabform_table_gth(sample)
             table_inds = None
         else:
             table_keys = sample['qa']['table_evidence']
@@ -104,17 +98,6 @@ class DensePassageRetriever:
         self.top_k = args.top_k
         self.top_p = args.top_p
         self.tabform = args.tabform
-        self.tabextract = args.tabextract
-        self.tabextract_type = args.tabextract_type
-        self.tabrerank = args.tabrerank
-        self.tabrerank_type = args.tabrerank_type
-        if self.tabrerank:
-            # self.reranker = Reranker(args.llm_config["rerank_model"])
-            self.reranker_lambda = args.tabrerank_lambda
-            if self.tabrerank_type != "none":
-                self.tabrerank_query_dict = args.rerank_query_dict
-            self.reranker_model_path = args.llm_config["rerank_model"]
-        self.extend_header = args.extend_header
         self.sim_func = nn.CosineSimilarity(dim=-1)
         self.device = "cuda"       
 
@@ -199,64 +182,6 @@ class DensePassageRetriever:
 
         return result_tables, subtables
 
-    def rerank_tabform_table_evidence(self, sample):
-        tables = sample['tables']
-        table_description = sample["table_description"]
-        table_trees = process_table_trees(tables, table_description)
-        question = sample["qa"]["question"]
-        if self.tabrerank_type != "none":
-            question = self.tabrerank_query_dict[sample["uid"]]
-
-        result_tables = []
-        subtables = {}
-        for i in range(len(tables)):
-            subtables[i] = {"rids": [], "cids": []}
-            table_tree = table_trees[i]
-
-            row_floor, row_ceil = table_tree.row_header_boundary, table_tree.max_rows
-            row_evids = []
-            for rid in range(row_floor, row_ceil):
-                row_evid = table_tree.extract_row(rid, extend=self.extend_header)
-                row_evids.append(row_evid)
-            if len(row_evids):
-                row_scores = call_reranker_vllm_online(question, row_evids, self.reranker_model_path)["results"]
-                row_scores.sort(key=lambda x: x['index'])
-            for rid in range(row_floor, row_ceil):
-                if row_scores[rid - row_floor]["relevance_score"] >= self.reranker_lambda:
-                    subtables[i]["rids"].append(rid)
-
-            col_floor, col_ceil = table_tree.col_header_boundary, table_tree.max_cols
-            col_evids = []
-            for cid in range(col_floor, col_ceil):
-                col_evid = table_tree.extract_col(cid)
-                col_evids.append(col_evid)
-            if len(col_evids):
-                col_scores = call_reranker_vllm_online(question, col_evids, self.reranker_model_path)["results"]
-                col_scores.sort(key=lambda x: x['index'])
-            for cid in range(col_floor, col_ceil):
-                if col_scores[cid - col_floor]["relevance_score"] >= self.reranker_lambda:
-                    subtables[i]["cids"].append(cid)
-
-            row_ids = subtables[i]["rids"]
-            col_ids = subtables[i]["cids"]
-            
-            if len(row_ids) == 0 or len(col_ids) == 0:
-                subtable = 'NONE'
-            else:
-                row_ids, col_ids = table_trees[i].extend_header_boundary(row_ids, col_ids)
-
-                if self.extend_header:
-                    row_ids = table_trees[i].extend_row_headers(row_ids)
-                try:
-                    subtable = table_trees[i].extract_subtable(row_ids, col_ids)
-                except Exception:
-                    subtable = 'NONE'
-
-            result_tables.append(subtable)
-
-        return result_tables, subtables
-
-
     def retrieve(self, sample):
         uid = sample['uid']
         doc_emb_path = os.path.join(self.path_root, uid, "doc_embs.json")
@@ -274,18 +199,18 @@ class DensePassageRetriever:
 
         update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, question_emb, text_st_embs)
         
-        if self.tabform:
-            if self.tabextract:
-                tabextract_path = os.path.join(self.path_root, uid, f"table_ext_{self.tabextract_type}.jsonl")
-                update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, tabextract_path)
-            elif self.tabrerank:
-                update_tables, retrieved_table_inds = self.rerank_tabform_table_evidence(sample)
-            else:
-                update_tables = sample['tables']
-                retrieved_table_inds = None
-        else:
-            table_st_embs = torch.tensor(emb_dict["table_embs"]).to(self.device)
-            update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, question_emb, table_st_embs)
+        # if self.tabform:
+        #     if self.tabextract:
+        #         tabextract_path = os.path.join(self.path_root, uid, f"table_ext_{self.tabextract_type}.jsonl")
+        #         update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, tabextract_path)
+        #     elif self.tabrerank:
+        #         update_tables, retrieved_table_inds = self.rerank_tabform_table_evidence(sample)
+        #     else:
+        #         update_tables = sample['tables']
+        #         retrieved_table_inds = None
+        # else:
+        table_st_embs = torch.tensor(emb_dict["table_embs"]).to(self.device)
+        update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, question_emb, table_st_embs)
 
         return update_texts, update_tables, retrieved_text_inds, retrieved_table_inds
         
