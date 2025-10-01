@@ -19,6 +19,20 @@ class Retriever:
             embeddings = self.model.encode(input)
         return embeddings
 
+    def soft_retrieve_eval(self, query: str, documents: List[str], gth: List) -> torch.Tensor:
+        query_embedding = self.model.encode([query], prompt_name="query")
+        document_embeddings = self.model.encode(documents)
+        similarity_scores = self.model.similarity(query_embedding, document_embeddings)
+        
+        overall_score = 0.0
+        for gitem in gth:
+            overall_score += similarity_scores[gitem].item()
+        overall_score /= len(gth) if len(gth) > 0 else 1.0
+        contrastive_score = overall_score - similarity_scores.mean().item()
+
+        return contrastive_score
+
+
     def retrieve(self, query: str, documents: List[str], top_k: int = 10) -> torch.Tensor:
         """
         Args:

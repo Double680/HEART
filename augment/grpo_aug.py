@@ -39,20 +39,32 @@ def format_reward(question):
 def process_text_scores(questions, **kwargs):
     text_docs = kwargs["paragraphs"]
     text_evids = [kwargs["qa"][id]["text_evidence"] for id in range(len(kwargs["qa"]))]
-    text_scores = [
-        retriever.eval(retriever.retrieve(question, text_doc), text_evid)[REWARD_TYPE] 
-        for question, text_doc, text_evid in zip(questions, text_docs, text_evids)
-    ]
+    if AUG_SOFT == 'soft':
+        text_scores = [
+            retriever.soft_retrieve_eval(question, text_doc, text_evid)
+            for question, text_doc, text_evid in zip(questions, text_docs, text_evids)
+        ]
+    else:
+        text_scores = [
+            retriever.eval(retriever.retrieve(question, text_doc, top_k=20), text_evid)[1] 
+            for question, text_doc, text_evid in zip(questions, text_docs, text_evids)
+        ]
     return text_scores
 
 
 def process_table_scores(questions, **kwargs):
     table_docs = kwargs["table_description"]
     table_evids = [kwargs["qa"][id]["table_evidence_id"] for id in range(len(kwargs["qa"]))]
-    table_scores = [
-        retriever.eval(retriever.retrieve(question, table_doc), table_evid)[REWARD_TYPE] 
-        for question, table_doc, table_evid in zip(questions, table_docs, table_evids)
-    ]
+    if AUG_SOFT == 'soft':
+        table_scores = [
+            retriever.soft_retrieve_eval(question, table_doc, table_evid)
+            for question, table_doc, table_evid in zip(questions, table_docs, table_evids)
+        ]
+    else:
+        table_scores = [
+            retriever.eval(retriever.retrieve(question, table_doc, top_k=20), table_evid)[1] 
+            for question, table_doc, table_evid in zip(questions, table_docs, table_evids)
+        ]
     return table_scores
 
 
@@ -73,9 +85,6 @@ def reward_func(completions, **kwargs):
         text_scores = process_text_scores(questions, **kwargs)
         table_scores = process_table_scores(questions, **kwargs)
 
-    import pdb
-    pdb.set_trace()
-
     retrieve_rewards = [
         reward_value(text_score) + reward_value(table_score)
         for text_score, table_score in zip(text_scores, table_scores)
@@ -88,16 +97,16 @@ def reward_func(completions, **kwargs):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text', 'table'])
-    parser.add_argument('--recall', action='store_true')
+    parser.add_argument('--soft', action='store_true')
     args = parser.parse_args()
 
-    REWARD_TYPE = 1 if args.recall else 2
+    AUG_SOFT = 'soft' if args.soft else 'hard'
     AUG_TYPE = args.aug_type
 
     train_data_path = 'datasets/multihiertt/train_new.json'
     retriever_model_path = 'models/Qwen3-Embedding-0.6B'
     augment_model_path = 'models/Qwen3-1.7B'
-    save_model_path = f'models/HybTQA-{args.aug_type}-{REWARD_TYPE}'
+    save_model_path = f'models/{args.aug_type}-{AUG_SOFT}'
 
     dataset = load_dataset('json', data_files=train_data_path)
 
