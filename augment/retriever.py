@@ -26,7 +26,7 @@ class Retriever:
         
         positive_score = 1.0
         negative_score = 0.0
-        for id in len(similarity_scores):
+        for id in range(len(similarity_scores)):
             if id in gth:
                 positive_score += similarity_scores[id].item()
             else:
