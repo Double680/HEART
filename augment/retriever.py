@@ -34,9 +34,10 @@ class Retriever:
         positive_score /= len(gth) + 1
         negative_score /= len(similarity_scores) - len(gth) + 1
 
-        contrastive_score = positive_score - negative_score
-        
-        return contrastive_score
+        # contrastive_score = positive_score - negative_score
+        # return contrastive_score
+    
+        return positive_score
 
 
     def retrieve(self, query: str, documents: List[str], top_k: int = 10) -> torch.Tensor:
