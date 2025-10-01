@@ -22,7 +22,7 @@ class Retriever:
     def soft_retrieve_eval(self, query: str, documents: List[str], gth: List) -> torch.Tensor:
         query_embedding = self.model.encode([query], prompt_name="query")
         document_embeddings = self.model.encode(documents)
-        similarity_scores = self.model.similarity(query_embedding, document_embeddings)
+        similarity_scores = self.model.similarity(query_embedding, document_embeddings).squeeze(0)
         
         positive_score = 1.0
         negative_score = 0.0
