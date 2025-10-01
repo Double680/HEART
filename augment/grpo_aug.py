@@ -9,6 +9,7 @@ from transformers import AutoModelForCausalLM
 import torch
 import argparse
 
+
 def make_conversation(example):
     with open("augment/aug_template.txt", "r") as file:
         template = file.read()
@@ -21,9 +22,11 @@ def make_conversation(example):
     }
     return prompt
 
+
 def reward_value(value):
     return 4 * value
     
+
 def format_reward(question):
     reward = -2
     if "<query>" in question and "</query>" in question:
@@ -32,44 +35,49 @@ def format_reward(question):
         reward += 1
     return reward
 
-def reward_func_joint(completions, **kwargs):
-    questions = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
-    format_rewards = [format_reward(question) for question in questions]
-    questions = [
-        question.split("<query>")[-1].split("</query>")[0].strip('\n') for question in questions
-    ]
+
+def process_text_scores(questions, **kwargs):
     text_docs = kwargs["paragraphs"]
-    table_docs = kwargs["table_description"]
     text_evids = [kwargs["qa"][id]["text_evidence"] for id in range(len(kwargs["qa"]))]
-    table_evids = [kwargs["qa"][id]["table_evidence"] for id in range(len(kwargs["qa"]))]
     text_scores = [
         retriever.eval(retriever.retrieve(question, text_doc), text_evid)[REWARD_TYPE] 
         for question, text_doc, text_evid in zip(questions, text_docs, text_evids)
     ]
+    return text_scores
+
+
+def process_table_scores(questions, **kwargs):
+    table_docs = kwargs["table_description"]
+    table_evids = [kwargs["qa"][id]["table_evidence"] for id in range(len(kwargs["qa"]))]
     table_scores = [
         retriever.eval(retriever.retrieve(question, table_doc), table_evid)[REWARD_TYPE] 
         for question, table_doc, table_evid in zip(questions, table_docs, table_evids)
     ]
-    retrieve_rewards = [
-        reward_value(text_score) + reward_value(table_score)
-        for text_score, table_score in zip(text_scores, table_scores)
-    ]
-    rewards = [fr + rr for fr, rr in zip(format_rewards, retrieve_rewards)]
-    return rewards
+    return table_scores
 
-def reward_func_text(completions, **kwargs):
+
+def reward_func(completions, **kwargs):
     questions = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
     format_rewards = [format_reward(question) for question in questions]
     questions = [
         question.split("<query>")[-1].split("</query>")[0].strip('\n') for question in questions
     ]
-    text_docs = kwargs["paragraphs"]
-    text_evids = [kwargs["qa"][id]["text_evidence"] for id in range(len(kwargs["qa"]))]
-    text_scores = [
-        retriever.eval(retriever.retrieve(question, text_doc), text_evid)[REWARD_TYPE] 
-        for question, text_doc, text_evid in zip(questions, text_docs, text_evids)
+
+    if AUG_TYPE == "text":
+        text_scores = process_text_scores(questions, **kwargs)
+        table_scores = text_scores
+    elif AUG_TYPE == "table":
+        table_scores = process_table_scores(questions, **kwargs)
+        text_scores = table_scores
+    else:
+        text_scores = process_text_scores(questions, **kwargs)
+        table_scores = process_table_scores(questions, **kwargs)
+
+    retrieve_rewards = [
+        reward_value(text_score) + reward_value(table_score)
+        for text_score, table_score in zip(text_scores, table_scores)
     ]
-    retrieve_rewards = [reward_value(text_score)*2 for text_score in text_scores]
+
     rewards = [fr + rr for fr, rr in zip(format_rewards, retrieve_rewards)]
     return rewards
 
@@ -81,6 +89,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     REWARD_TYPE = 1 if args.recall else 2
+    AUG_TYPE = args.aug_type
+
     train_data_path = 'datasets/multihiertt/train_new.json'
     retriever_model_path = 'models/Qwen3-Embedding-0.6B'
     augment_model_path = 'models/Qwen3-1.7B'
@@ -113,13 +123,6 @@ if __name__ == "__main__":
     )
 
     retriever = Retriever(retriever_model_path)
-    
-    if args.aug_type == 'text':
-        reward_func = reward_func_text
-    elif args.aug_type == 'table':
-        reward_func = reward_func_table
-    else:
-        reward_func = reward_func_joint
 
     trainer = GRPOTrainer(
         model=model,
