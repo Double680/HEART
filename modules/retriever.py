@@ -124,7 +124,7 @@ class DensePassageRetriever:
     def retrieve_table_evidence(self, sample, question_emb, table_st_embs):
         tables = sample['tables']
         table_desc = sample['table_description']
-        table_desc_st = [(int(key.split('-')[0]), table_desc[key]) for key in table_desc]
+        table_desc_st = [(int(key.split('-')[0]), int(key.split('-')[1]), int(key.split('-')[2]), table_desc[key]) for key in table_desc]
         table_scores = self.sim_func(question_emb, table_st_embs)
         if self.top_p == 0:
             retrieved_table_inds = torch.topk(table_scores, k=min(self.top_k, len(table_scores))).indices.tolist()
@@ -132,10 +132,31 @@ class DensePassageRetriever:
             retrieved_table_inds = torch.where(table_scores >= self.top_p)[0].tolist()
         update_table_inds = sorted(retrieved_table_inds)
         update_table_desc = [table_desc_st[ind] for ind in update_table_inds]
-        update_table_dict = {i: [] for i in range(len(tables))}
-        for table_id, desc in update_table_desc:
-            update_table_dict[table_id].append(desc)
-        update_tables = ["\n".join(update_table_dict[i]) for i in range(len(tables))]
+        
+        if self.tabform:
+            update_tables = []
+            tabform_dict = {}
+            for tid, rid, cid, _ in update_table_desc:
+                if tid not in tabform_dict:
+                    tabform_dict[tid] = {"rows": set(), "cols": set()}
+                tabform_dict[tid]["rows"].add(rid)
+                tabform_dict[tid]["cols"].add(cid)
+            table_trees = process_table_trees(tables, table_desc)
+            for tid, table_tree in enumerate(table_trees):
+                if tid in tabform_dict:
+                    row_ids = list(tabform_dict[tid]["rows"])
+                    col_ids = list(tabform_dict[tid]["cols"])
+                    row_ids, col_ids = table_tree.extend_header_boundary(row_ids, col_ids)
+                    row_ids = table_tree.extend_row_headers(row_ids)
+                    subtable = table_tree.extract_subtable(row_ids, col_ids)
+                else:
+                    subtable = ''
+                update_tables.append(subtable)
+        else:
+            update_table_dict = {i: [] for i in range(len(tables))}
+            for tid, _, _, desc in update_table_desc:
+                update_table_dict[tid].append(desc)
+            update_tables = ["\n".join(update_table_dict[i]) for i in range(len(tables))]
 
         return update_tables, retrieved_table_inds
 
