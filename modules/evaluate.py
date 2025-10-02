@@ -216,7 +216,7 @@ def evaluate(args):
                         table_ndcg += table_dcg / table_idcg
                     except ZeroDivisionError:
                         table_ndcg += 1
-                elif args.retrieve_type != "gth" and (args.tabextract or args.tabrerank):
+                elif args.retrieve_type != "gth":
                     table_gth = list(dict.fromkeys(samples[i]['qa']['table_evidence']).keys())
                     table_pred = result["retrieved_table_ids"]
                     recall_score = recall_eval(table_pred, table_gth)
@@ -236,7 +236,7 @@ def evaluate(args):
                 table_rec = table_rec / (end-start)
                 table_ndcg = table_ndcg / (end-start)
                 print(f'Retrieved Tables Presicion: {table_pre*100:.2f}, Recall: {table_rec*100:.2f}, NDCG: {table_ndcg*100:.2f}')
-            elif args.retrieve_type != "gth" and (args.tabextract or args.tabrerank):
+            elif args.retrieve_type != "gth":
                 table_rec = table_rec / (end-start)
                 print(f'Retrieved Tables Recall: {table_rec*100:.2f}')
 
