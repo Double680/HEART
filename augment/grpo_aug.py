@@ -99,11 +99,11 @@ if __name__ == "__main__":
     parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text', 'table', 'hybrid'])  # hybrid: text-hard, table-soft
     parser.add_argument('--soft', action='store_true')
     parser.add_argument('--beta', default=0, type=float)
-    parser.add_argument('--contrustive', action='store_true')
+    parser.add_argument('--contrastive', action='store_true')
     args = parser.parse_args()
 
     AUG_SOFT = 'soft' if args.soft else 'hard'
-    CONTRASTIVE = args.contrustive
+    CONTRASTIVE = args.contrastive
     AUG_TYPE = args.aug_type
 
     train_data_path = 'datasets/multihiertt/train_new.json'
