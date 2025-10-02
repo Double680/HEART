@@ -182,35 +182,45 @@ class DensePassageRetriever:
 
         return result_tables, subtables
 
+    def get_question_emb(self, uid, query_type=None):
+        if query_type is None:
+            query_emb_path = os.path.join(self.path_root, uid, "query_embs.json")
+        else:
+            query_emb_path = os.path.join(self.path_root, uid, f"{query_type}_query_embs.json")
+        with open(query_emb_path, "r") as file:
+            query_emb_dict = json.loads(file.read())
+            question_emb = torch.tensor(query_emb_dict["query_embs"]).to(self.device)
+        return question_emb
+
     def retrieve(self, sample):
         uid = sample['uid']
         doc_emb_path = os.path.join(self.path_root, uid, "doc_embs.json")
         with open(doc_emb_path, "r") as file:
             emb_dict = json.loads(file.read())
+
         text_st_embs = torch.tensor(emb_dict["text_embs"]).to(self.device)
-
-        if self.aug != 'none':
-            query_emb_path = os.path.join(self.path_root, uid, f"{self.aug}_query_embs.json")
-        else:
-            query_emb_path = os.path.join(self.path_root, uid, "query_embs.json")
-        with open(query_emb_path, "r") as file:
-            query_emb_dict = json.loads(file.read())
-            question_emb = torch.tensor(query_emb_dict["query_embs"]).to(self.device)
-
-        update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, question_emb, text_st_embs)
-        
-        # if self.tabform:
-        #     if self.tabextract:
-        #         tabextract_path = os.path.join(self.path_root, uid, f"table_ext_{self.tabextract_type}.jsonl")
-        #         update_tables, retrieved_table_inds = self.retrieve_tabform_table_evidence(sample, tabextract_path)
-        #     elif self.tabrerank:
-        #         update_tables, retrieved_table_inds = self.rerank_tabform_table_evidence(sample)
-        #     else:
-        #         update_tables = sample['tables']
-        #         retrieved_table_inds = None
-        # else:
         table_st_embs = torch.tensor(emb_dict["table_embs"]).to(self.device)
-        update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, question_emb, table_st_embs)
+        
+        # text aug type
+        if self.aug in ["raw_aug", "text-hard", "text-soft", "joint-hard", "joint-soft"]:
+            text_question_emb = self.get_question_emb(uid, self.aug)
+        elif self.aug in ["none", "table-hard", "table-soft"]:
+            text_question_emb = self.get_question_emb(uid)
+        else:
+            mode = self.aug.split('-')[-1]
+            text_question_emb = self.get_question_emb(uid, f"text-{mode}")
+
+        # table aug type
+        if self.aug in ["raw_aug", "table-hard", "table-soft", "joint-hard", "joint-soft"]:
+            table_question_emb = self.get_question_emb(uid, self.aug)
+        elif self.aug in ["none", "text-hard", "text-soft"]:
+            table_question_emb = self.get_question_emb(uid)
+        else:
+            mode = self.aug.split('-')[-1]
+            table_question_emb = self.get_question_emb(uid, f"table-{mode}")
+
+        update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, text_question_emb, text_st_embs)
+        update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, table_question_emb, table_st_embs)
 
         return update_texts, update_tables, retrieved_text_inds, retrieved_table_inds
         
