@@ -41,7 +41,7 @@ def process_text_scores(questions, **kwargs):
     text_evids = [kwargs["qa"][id]["text_evidence"] for id in range(len(kwargs["qa"]))]
     if AUG_SOFT == 'soft' and AUG_TYPE != 'hybrid':
         text_scores = [
-            retriever.soft_retrieve_eval(question, text_doc, text_evid)
+            retriever.soft_retrieve_eval(question, text_doc, text_evid, contrastive=CONTRASTIVE)
             for question, text_doc, text_evid in zip(questions, text_docs, text_evids)
         ]
     else:
@@ -57,7 +57,7 @@ def process_table_scores(questions, **kwargs):
     table_evids = [kwargs["qa"][id]["table_evidence_id"] for id in range(len(kwargs["qa"]))]
     if AUG_SOFT == 'soft' or AUG_TYPE == 'hybrid':
         table_scores = [
-            retriever.soft_retrieve_eval(question, table_doc, table_evid)
+            retriever.soft_retrieve_eval(question, table_doc, table_evid, contrastive=CONTRASTIVE)
             for question, table_doc, table_evid in zip(questions, table_docs, table_evids)
         ]
     else:
@@ -98,15 +98,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text', 'table', 'hybrid'])  # hybrid: text-hard, table-soft
     parser.add_argument('--soft', action='store_true')
+    parser.add_argument('--beta', default=0, type=float)
+    parser.add_argument('--contrustive', action='store_true')
     args = parser.parse_args()
 
     AUG_SOFT = 'soft' if args.soft else 'hard'
+    CONTRASTIVE = args.contrustive
     AUG_TYPE = args.aug_type
 
     train_data_path = 'datasets/multihiertt/train_new.json'
     retriever_model_path = 'models/Qwen3-Embedding-0.6B'
     augment_model_path = 'models/Qwen3-1.7B'
     save_model_path = f'models/{args.aug_type}-{AUG_SOFT}'
+    if args.beta > 0:
+        save_model_path += f'-beta{args.beta}'
+    if CONTRASTIVE:
+        save_model_path += '-cont'
 
     dataset = load_dataset('json', data_files=train_data_path)
 
@@ -124,6 +131,7 @@ if __name__ == "__main__":
         max_prompt_length=128,
         logging_steps=5,
         save_steps=2000,
+        beta=args.beta,
         report_to=None
     )
 
