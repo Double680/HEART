@@ -25,8 +25,8 @@ def init_args():
 
     parser.add_argument("--retrieve_type", default="none", choices=["none", "dpr", "gth"])
 
-    parser.add_argument("--top_k", default=10, type=int)  # only for dpr
-    parser.add_argument("--top_p", default=0, type=float)  # only for dpr, if top_p > 0, use top_p to filter tables
+    parser.add_argument("--top_k", default=20, type=int)  # only for dpr
+    parser.add_argument("--top_p", default=0.5, type=float)  # only for dpr, if top_p > 0, use top_p to filter tables
     parser.add_argument("--query_aug", default="none", choices=[
         "none", "raw_aug", "text-hard", "text-soft", "table-hard", "table-soft", 
         "text-table-hard", "text-table-soft", "joint-hard", "joint-soft", 
