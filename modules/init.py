@@ -88,6 +88,7 @@ def init_model_config(args):
             setting += "_tabform"
 
     save_root_setting = os.path.join(save_root_model, setting)
+    print("Saving to: ", save_root_setting)
 
     ensure_dirs(save_root, save_root_model, save_root_setting)
     args.save_root_setting = save_root_setting

@@ -39,7 +39,7 @@ def format_reward(question):
 def process_text_scores(questions, **kwargs):
     text_docs = kwargs["paragraphs"]
     text_evids = [kwargs["qa"][id]["text_evidence"] for id in range(len(kwargs["qa"]))]
-    if AUG_SOFT == 'soft':
+    if AUG_SOFT == 'soft' and AUG_TYPE != 'hybrid':
         text_scores = [
             retriever.soft_retrieve_eval(question, text_doc, text_evid)
             for question, text_doc, text_evid in zip(questions, text_docs, text_evids)
@@ -55,7 +55,7 @@ def process_text_scores(questions, **kwargs):
 def process_table_scores(questions, **kwargs):
     table_docs = kwargs["table_description"]
     table_evids = [kwargs["qa"][id]["table_evidence_id"] for id in range(len(kwargs["qa"]))]
-    if AUG_SOFT == 'soft':
+    if AUG_SOFT == 'soft' or AUG_TYPE == 'hybrid':
         table_scores = [
             retriever.soft_retrieve_eval(question, table_doc, table_evid)
             for question, table_doc, table_evid in zip(questions, table_docs, table_evids)
@@ -96,7 +96,7 @@ def reward_func(completions, **kwargs):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text', 'table'])
+    parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text', 'table', 'hybrid'])  # hybrid: text-hard, table-soft
     parser.add_argument('--soft', action='store_true')
     args = parser.parse_args()
 
