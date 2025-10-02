@@ -29,7 +29,7 @@ def init_args():
     parser.add_argument("--top_p", default=0.5, type=float)  # only for dpr, if top_p > 0, use top_p to filter tables
     parser.add_argument("--query_aug", default="none", choices=[
         "none", "raw_aug", "text-hard", "text-soft", "table-hard", "table-soft", 
-        "text-table-hard", "text-table-soft", "joint-hard", "joint-soft", 
+        "text-table-hard", "text-table-soft", "text-hard-table-soft", "joint-hard", "joint-soft", 
     ])  # only for dpr
     parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
     parser.add_argument("--tabform", action="store_true")  # only for dpr or gth

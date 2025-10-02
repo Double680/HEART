@@ -206,6 +206,8 @@ class DensePassageRetriever:
             text_question_emb = self.get_question_emb(uid, self.aug)
         elif self.aug in ["none", "table-hard", "table-soft"]:
             text_question_emb = self.get_question_emb(uid)
+        elif self.aug == "text-hard-table-soft":
+            text_question_emb = self.get_question_emb(uid, "text-hard")
         else:
             mode = self.aug.split('-')[-1]
             text_question_emb = self.get_question_emb(uid, f"text-{mode}")
@@ -215,6 +217,8 @@ class DensePassageRetriever:
             table_question_emb = self.get_question_emb(uid, self.aug)
         elif self.aug in ["none", "text-hard", "text-soft"]:
             table_question_emb = self.get_question_emb(uid)
+        elif self.aug == "text-hard-table-soft":
+            table_question_emb = self.get_question_emb(uid, "table-soft")
         else:
             mode = self.aug.split('-')[-1]
             table_question_emb = self.get_question_emb(uid, f"table-{mode}")
