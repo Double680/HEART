@@ -138,27 +138,29 @@ class DensePassageRetriever:
             tabform_dict = {}
             for tid, rid, cid, _ in update_table_desc:
                 if tid not in tabform_dict:
-                    tabform_dict[tid] = {"rows": set(), "cols": set()}
-                tabform_dict[tid]["rows"].add(rid)
-                tabform_dict[tid]["cols"].add(cid)
+                    tabform_dict[tid] = {"rids": [], "cids": []}
+                tabform_dict[tid]["rids"].append(rid)
+                tabform_dict[tid]["cids"].append(cid)
             table_trees = process_table_trees(tables, table_desc)
             for tid, table_tree in enumerate(table_trees):
                 if tid in tabform_dict:
-                    row_ids = list(tabform_dict[tid]["rows"])
-                    col_ids = list(tabform_dict[tid]["cols"])
+                    row_ids = list(set(tabform_dict[tid]["rids"]))
+                    col_ids = list(set(tabform_dict[tid]["cids"]))
                     row_ids, col_ids = table_tree.extend_header_boundary(row_ids, col_ids)
                     row_ids = table_tree.extend_row_headers(row_ids)
                     subtable = table_tree.extract_subtable(row_ids, col_ids)
                 else:
                     subtable = ''
                 update_tables.append(subtable)
+
+            return update_tables, tabform_dict
         else:
             update_table_dict = {i: [] for i in range(len(tables))}
             for tid, _, _, desc in update_table_desc:
                 update_table_dict[tid].append(desc)
             update_tables = ["\n".join(update_table_dict[i]) for i in range(len(tables))]
 
-        return update_tables, retrieved_table_inds
+            return update_tables, retrieved_table_inds
 
     def retrieve_tabform_table_evidence(self, sample, table_process_path):
         tables = sample['tables']
@@ -223,7 +225,7 @@ class DensePassageRetriever:
         table_st_embs = torch.tensor(emb_dict["table_embs"]).to(self.device)
         
         # text aug type
-        if self.aug in ["raw_aug", "text-hard", "text-soft", "joint-hard", "joint-soft"]:
+        if self.aug in ["raw_aug", "text-hard", "text-soft", "joint-hard", "joint-soft", "hybrid", "joint-soft-0.1", "joint-soft-cont", "joint-soft-0.1-cont"]:
             text_question_emb = self.get_question_emb(uid, self.aug)
         elif self.aug in ["none", "table-hard", "table-soft"]:
             text_question_emb = self.get_question_emb(uid)
@@ -234,7 +236,7 @@ class DensePassageRetriever:
             text_question_emb = self.get_question_emb(uid, f"text-{mode}")
 
         # table aug type
-        if self.aug in ["raw_aug", "table-hard", "table-soft", "joint-hard", "joint-soft"]:
+        if self.aug in ["raw_aug", "table-hard", "table-soft", "joint-hard", "joint-soft", "hybrid", "joint-soft-0.1", "joint-soft-cont", "joint-soft-0.1-cont"]:
             table_question_emb = self.get_question_emb(uid, self.aug)
         elif self.aug in ["none", "text-hard", "text-soft"]:
             table_question_emb = self.get_question_emb(uid)

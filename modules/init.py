@@ -26,10 +26,11 @@ def init_args():
     parser.add_argument("--retrieve_type", default="none", choices=["none", "dpr", "gth"])
 
     parser.add_argument("--top_k", default=20, type=int)  # only for dpr
-    parser.add_argument("--top_p", default=0.5, type=float)  # only for dpr, if top_p > 0, use top_p to filter tables
+    parser.add_argument("--top_p", default=0.4, type=float)  # only for dpr, if top_p > 0, use top_p to filter tables
     parser.add_argument("--query_aug", default="none", choices=[
         "none", "raw_aug", "text-hard", "text-soft", "table-hard", "table-soft", 
         "text-table-hard", "text-table-soft", "text-hard-table-soft", "joint-hard", "joint-soft", 
+        "hybrid", "joint-soft-0.1", "joint-soft-cont", "joint-soft-0.1-cont"
     ])  # only for dpr
     parser.add_argument("--stored_embs_path", default="./stored")  # only for dpr
     parser.add_argument("--tabform", action="store_true")  # only for dpr or gth
@@ -62,10 +63,8 @@ def init_dataset(args):
 def init_model_config(args):
     load_dotenv()
     llm_model = os.getenv("LLM_MODEL")
-    rerank_model = os.getenv("RERANK_MODEL")
     llm_config = {
         "llm_model": llm_model,
-        "rerank_model": rerank_model,
         "api_key": os.getenv('API_KEY'),
         "base_url": os.getenv('BASE_URL'),
     }
@@ -86,6 +85,8 @@ def init_model_config(args):
                 setting += f"_{args.query_aug}"
         if args.tabform:
             setting += "_tabform"
+    if not args.dev:
+        setting += "_test"
 
     save_root_setting = os.path.join(save_root_model, setting)
     print("Saving to: ", save_root_setting)
