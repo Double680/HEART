@@ -2,7 +2,130 @@ import os
 import json
 import torch
 import torch.nn as nn
+import math
+import re
+from collections import Counter
 from modules.process_tables import *
+
+
+def tokenize(text):
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def normalize_scores(scores):
+    if len(scores) == 0:
+        return scores
+    min_score = min(scores)
+    max_score = max(scores)
+    if max_score == min_score:
+        return [0.0 for _ in scores]
+    return [(score - min_score) / (max_score - min_score) for score in scores]
+
+
+def top_k_indices(scores, top_k):
+    if len(scores) == 0:
+        return []
+    indexed_scores = list(enumerate(scores))
+    indexed_scores.sort(key=lambda item: item[1], reverse=True)
+    return [idx for idx, _ in indexed_scores[:min(top_k, len(indexed_scores))]]
+
+
+def threshold_or_top_k_indices(scores, top_k, top_p):
+    if len(scores) == 0:
+        return []
+    if top_p > 0:
+        return [idx for idx, score in enumerate(scores) if score >= top_p]
+    return top_k_indices(scores, top_k)
+
+
+class BM25Scorer:
+    def __init__(self, documents, k1=1.5, b=0.75):
+        self.documents = [tokenize(doc) for doc in documents]
+        self.k1 = k1
+        self.b = b
+        self.avgdl = sum(len(doc) for doc in self.documents) / len(self.documents) if self.documents else 0
+        self.doc_freq = Counter()
+        for doc in self.documents:
+            self.doc_freq.update(set(doc))
+
+    def score(self, query):
+        query_terms = tokenize(query)
+        doc_count = len(self.documents)
+        if doc_count == 0:
+            return []
+        scores = []
+        for doc in self.documents:
+            term_freq = Counter(doc)
+            doc_len = len(doc)
+            score = 0.0
+            for term in query_terms:
+                freq = term_freq.get(term, 0)
+                if freq == 0:
+                    continue
+                df = self.doc_freq.get(term, 0)
+                idf = math.log(1 + (doc_count - df + 0.5) / (df + 0.5))
+                denom = freq + self.k1 * (1 - self.b + self.b * doc_len / (self.avgdl or 1))
+                score += idf * freq * (self.k1 + 1) / denom
+            scores.append(score)
+        return scores
+
+
+def table_description_items(sample):
+    table_desc = sample['table_description']
+    return [
+        (int(key.split('-')[0]), int(key.split('-')[1]), int(key.split('-')[2]), table_desc[key])
+        for key in table_desc
+    ]
+
+
+def build_text_context(sample, retrieved_text_inds, tabform=False):
+    paragraphs = sample["paragraphs"]
+    text_table_inds = []
+    table_cnt = 0
+    for i in range(len(paragraphs)):
+        if paragraphs[i] == f'## Table {table_cnt} ##':
+            if tabform and i > 0:
+                text_table_inds.append(i-1)
+            text_table_inds.append(i)
+            table_cnt += 1
+    update_text_inds = sorted(list(
+        set(text_table_inds).union(set(retrieved_text_inds))
+    ))
+    update_texts = [paragraphs[ind] for ind in update_text_inds]
+    return update_texts
+
+
+def build_table_context(sample, retrieved_table_inds, tabform=False):
+    tables = sample['tables']
+    table_desc_st = table_description_items(sample)
+    update_table_inds = sorted(retrieved_table_inds)
+    update_table_desc = [table_desc_st[ind] for ind in update_table_inds]
+    if tabform:
+        update_tables = []
+        tabform_dict = {}
+        for tid, rid, cid, _ in update_table_desc:
+            if tid not in tabform_dict:
+                tabform_dict[tid] = {"rids": [], "cids": []}
+            tabform_dict[tid]["rids"].append(rid)
+            tabform_dict[tid]["cids"].append(cid)
+        table_trees = process_table_trees(tables, sample['table_description'])
+        for tid, table_tree in enumerate(table_trees):
+            if tid in tabform_dict:
+                row_ids = list(set(tabform_dict[tid]["rids"]))
+                col_ids = list(set(tabform_dict[tid]["cids"]))
+                row_ids, col_ids = table_tree.extend_header_boundary(row_ids, col_ids)
+                row_ids = table_tree.extend_row_headers(row_ids)
+                subtable = table_tree.extract_subtable(row_ids, col_ids)
+            else:
+                subtable = ''
+            update_tables.append(subtable)
+        return update_tables, tabform_dict
+
+    update_table_dict = {i: [] for i in range(len(tables))}
+    for tid, _, _, desc in update_table_desc:
+        update_table_dict[tid].append(desc)
+    update_tables = ["\n".join(update_table_dict[i]) for i in range(len(tables))]
+    return update_tables, retrieved_table_inds
 
 
 class GroundTruthRetriever:
@@ -99,68 +222,30 @@ class DensePassageRetriever:
         self.top_p = args.top_p
         self.tabform = args.tabform
         self.sim_func = nn.CosineSimilarity(dim=-1)
-        self.device = "cuda"       
+        self.device = args.device
+        if self.device == "cuda" and not torch.cuda.is_available():
+            self.device = "cpu"
 
     def retrieve_text_evidence(self, sample, question_emb, text_st_embs):
-        paragraphs = sample["paragraphs"]
-        text_table_inds = []
-        table_cnt = 0
-        for i in range(len(paragraphs)):
-            if paragraphs[i] == f'## Table {table_cnt} ##':
-                if self.tabform:
-                    text_table_inds.append(i-1)
-                text_table_inds.append(i)
-                table_cnt += 1
-        
         text_scores = self.sim_func(question_emb, text_st_embs)
+        if len(text_scores) == 0:
+            return [], []
         retrieved_text_inds = torch.topk(text_scores, k=min(self.top_k, len(text_scores))).indices.tolist()
-        update_text_inds = sorted(list(
-            set(text_table_inds).union(set(retrieved_text_inds))
-        )) 
-        update_texts = [sample["paragraphs"][ind] for ind in update_text_inds]
+        update_texts = build_text_context(sample, retrieved_text_inds, self.tabform)
 
         return update_texts, retrieved_text_inds
 
     def retrieve_table_evidence(self, sample, question_emb, table_st_embs):
-        tables = sample['tables']
-        table_desc = sample['table_description']
-        table_desc_st = [(int(key.split('-')[0]), int(key.split('-')[1]), int(key.split('-')[2]), table_desc[key]) for key in table_desc]
         table_scores = self.sim_func(question_emb, table_st_embs)
+        if len(table_scores) == 0:
+            empty_tables = ['' for _ in range(len(sample['tables']))]
+            return empty_tables, {} if self.tabform else []
         if self.top_p == 0:
             retrieved_table_inds = torch.topk(table_scores, k=min(self.top_k, len(table_scores))).indices.tolist()
         else:
             retrieved_table_inds = torch.where(table_scores >= self.top_p)[0].tolist()
-        update_table_inds = sorted(retrieved_table_inds)
-        update_table_desc = [table_desc_st[ind] for ind in update_table_inds]
-        
-        if self.tabform:
-            update_tables = []
-            tabform_dict = {}
-            for tid, rid, cid, _ in update_table_desc:
-                if tid not in tabform_dict:
-                    tabform_dict[tid] = {"rids": [], "cids": []}
-                tabform_dict[tid]["rids"].append(rid)
-                tabform_dict[tid]["cids"].append(cid)
-            table_trees = process_table_trees(tables, table_desc)
-            for tid, table_tree in enumerate(table_trees):
-                if tid in tabform_dict:
-                    row_ids = list(set(tabform_dict[tid]["rids"]))
-                    col_ids = list(set(tabform_dict[tid]["cids"]))
-                    row_ids, col_ids = table_tree.extend_header_boundary(row_ids, col_ids)
-                    row_ids = table_tree.extend_row_headers(row_ids)
-                    subtable = table_tree.extract_subtable(row_ids, col_ids)
-                else:
-                    subtable = ''
-                update_tables.append(subtable)
-
-            return update_tables, tabform_dict
-        else:
-            update_table_dict = {i: [] for i in range(len(tables))}
-            for tid, _, _, desc in update_table_desc:
-                update_table_dict[tid].append(desc)
-            update_tables = ["\n".join(update_table_dict[i]) for i in range(len(tables))]
-
-            return update_tables, retrieved_table_inds
+        update_tables, retrieved_table_inds = build_table_context(sample, retrieved_table_inds, self.tabform)
+        return update_tables, retrieved_table_inds
 
     def retrieve_tabform_table_evidence(self, sample, table_process_path):
         tables = sample['tables']
@@ -215,6 +300,26 @@ class DensePassageRetriever:
             question_emb = torch.tensor(query_emb_dict["query_embs"]).to(self.device)
         return question_emb
 
+    def get_text_question_emb(self, uid):
+        if self.aug in ["raw_aug", "text-hard", "text-soft", "joint-hard", "joint-soft", "hybrid", "joint-soft-0.1", "joint-soft-cont", "joint-soft-0.1-cont"]:
+            return self.get_question_emb(uid, self.aug)
+        if self.aug in ["none", "table-hard", "table-soft"]:
+            return self.get_question_emb(uid)
+        if self.aug == "text-hard-table-soft":
+            return self.get_question_emb(uid, "text-hard")
+        mode = self.aug.split('-')[-1]
+        return self.get_question_emb(uid, f"text-{mode}")
+
+    def get_table_question_emb(self, uid):
+        if self.aug in ["raw_aug", "table-hard", "table-soft", "joint-hard", "joint-soft", "hybrid", "joint-soft-0.1", "joint-soft-cont", "joint-soft-0.1-cont"]:
+            return self.get_question_emb(uid, self.aug)
+        if self.aug in ["none", "text-hard", "text-soft"]:
+            return self.get_question_emb(uid)
+        if self.aug == "text-hard-table-soft":
+            return self.get_question_emb(uid, "table-soft")
+        mode = self.aug.split('-')[-1]
+        return self.get_question_emb(uid, f"table-{mode}")
+
     def retrieve(self, sample):
         uid = sample['uid']
         doc_emb_path = os.path.join(self.path_root, uid, "doc_embs.json")
@@ -224,32 +329,89 @@ class DensePassageRetriever:
         text_st_embs = torch.tensor(emb_dict["text_embs"]).to(self.device)
         table_st_embs = torch.tensor(emb_dict["table_embs"]).to(self.device)
         
-        # text aug type
-        if self.aug in ["raw_aug", "text-hard", "text-soft", "joint-hard", "joint-soft", "hybrid", "joint-soft-0.1", "joint-soft-cont", "joint-soft-0.1-cont"]:
-            text_question_emb = self.get_question_emb(uid, self.aug)
-        elif self.aug in ["none", "table-hard", "table-soft"]:
-            text_question_emb = self.get_question_emb(uid)
-        elif self.aug == "text-hard-table-soft":
-            text_question_emb = self.get_question_emb(uid, "text-hard")
-        else:
-            mode = self.aug.split('-')[-1]
-            text_question_emb = self.get_question_emb(uid, f"text-{mode}")
-
-        # table aug type
-        if self.aug in ["raw_aug", "table-hard", "table-soft", "joint-hard", "joint-soft", "hybrid", "joint-soft-0.1", "joint-soft-cont", "joint-soft-0.1-cont"]:
-            table_question_emb = self.get_question_emb(uid, self.aug)
-        elif self.aug in ["none", "text-hard", "text-soft"]:
-            table_question_emb = self.get_question_emb(uid)
-        elif self.aug == "text-hard-table-soft":
-            table_question_emb = self.get_question_emb(uid, "table-soft")
-        else:
-            mode = self.aug.split('-')[-1]
-            table_question_emb = self.get_question_emb(uid, f"table-{mode}")
+        text_question_emb = self.get_text_question_emb(uid)
+        table_question_emb = self.get_table_question_emb(uid)
 
         update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, text_question_emb, text_st_embs)
         update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, table_question_emb, table_st_embs)
 
         return update_texts, update_tables, retrieved_text_inds, retrieved_table_inds
-        
-         
-        
+
+
+class BM25Retriever:
+    def __init__(self, args):
+        self.top_k = args.top_k
+        self.top_p = args.top_p
+        self.tabform = args.tabform
+
+    def get_query(self, sample):
+        return sample.get("augmented_question", sample['qa']['question'])
+
+    def retrieve_text_evidence(self, sample, query):
+        scores = BM25Scorer(sample["paragraphs"]).score(query)
+        retrieved_text_inds = top_k_indices(scores, self.top_k)
+        update_texts = build_text_context(sample, retrieved_text_inds, self.tabform)
+        return update_texts, retrieved_text_inds
+
+    def retrieve_table_evidence(self, sample, query):
+        table_docs = [item[-1] for item in table_description_items(sample)]
+        scores = normalize_scores(BM25Scorer(table_docs).score(query))
+        retrieved_table_inds = threshold_or_top_k_indices(scores, self.top_k, self.top_p)
+        update_tables, retrieved_table_inds = build_table_context(sample, retrieved_table_inds, self.tabform)
+        return update_tables, retrieved_table_inds
+
+    def retrieve(self, sample):
+        query = self.get_query(sample)
+        update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, query)
+        update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, query)
+        return update_texts, update_tables, retrieved_text_inds, retrieved_table_inds
+
+
+class HybridRetriever(DensePassageRetriever):
+    def __init__(self, args):
+        super().__init__(args)
+        self.bm25_weight = args.bm25_weight
+
+    def get_query(self, sample):
+        return sample.get("augmented_question", sample['qa']['question'])
+
+    def combine_scores(self, dense_scores, bm25_scores):
+        dense_scores = normalize_scores(dense_scores)
+        bm25_scores = normalize_scores(bm25_scores)
+        return [
+            self.bm25_weight * bm25_score + (1 - self.bm25_weight) * dense_score
+            for dense_score, bm25_score in zip(dense_scores, bm25_scores)
+        ]
+
+    def retrieve_text_evidence(self, sample, query, question_emb, text_st_embs):
+        dense_scores = self.sim_func(question_emb, text_st_embs).tolist()
+        bm25_scores = BM25Scorer(sample["paragraphs"]).score(query)
+        scores = self.combine_scores(dense_scores, bm25_scores)
+        retrieved_text_inds = top_k_indices(scores, self.top_k)
+        update_texts = build_text_context(sample, retrieved_text_inds, self.tabform)
+        return update_texts, retrieved_text_inds
+
+    def retrieve_table_evidence(self, sample, query, question_emb, table_st_embs):
+        table_docs = [item[-1] for item in table_description_items(sample)]
+        dense_scores = self.sim_func(question_emb, table_st_embs).tolist()
+        bm25_scores = BM25Scorer(table_docs).score(query)
+        scores = self.combine_scores(dense_scores, bm25_scores)
+        retrieved_table_inds = threshold_or_top_k_indices(scores, self.top_k, self.top_p)
+        update_tables, retrieved_table_inds = build_table_context(sample, retrieved_table_inds, self.tabform)
+        return update_tables, retrieved_table_inds
+
+    def retrieve(self, sample):
+        uid = sample['uid']
+        doc_emb_path = os.path.join(self.path_root, uid, "doc_embs.json")
+        with open(doc_emb_path, "r") as file:
+            emb_dict = json.loads(file.read())
+
+        text_st_embs = torch.tensor(emb_dict["text_embs"]).to(self.device)
+        table_st_embs = torch.tensor(emb_dict["table_embs"]).to(self.device)
+        text_question_emb = self.get_text_question_emb(uid)
+        table_question_emb = self.get_table_question_emb(uid)
+        query = self.get_query(sample)
+
+        update_texts, retrieved_text_inds = self.retrieve_text_evidence(sample, query, text_question_emb, text_st_embs)
+        update_tables, retrieved_table_inds = self.retrieve_table_evidence(sample, query, table_question_emb, table_st_embs)
+        return update_texts, update_tables, retrieved_text_inds, retrieved_table_inds

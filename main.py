@@ -26,11 +26,16 @@ async def run_sample(args):
     start = args.start
     end = args.end
     batch = args.batch
+    semaphore = asyncio.Semaphore(args.max_concurrency)
+
+    async def query_with_limit(sample):
+        async with semaphore:
+            await agent.query(sample)
 
     for i in range(start, end, batch):
         left, right = i, min(i+batch, end)
         print(f"Run sample {left}-{right-1}")
-        await tqdm_asyncio.gather(*(agent.query(sample) for sample in args.samples[left:right]))
+        await tqdm_asyncio.gather(*(query_with_limit(sample) for sample in args.samples[left:right]))
 
         process_output(args, left, right)
 

@@ -25,6 +25,19 @@ def make_conversation(example):
 
 def reward_value(value):
     return 4 * value
+
+
+def get_save_model_path(args):
+    if args.aug_type == 'hybrid':
+        save_model_path = 'models/hybrid'
+    else:
+        aug_soft = 'soft' if args.soft else 'hard'
+        save_model_path = f'models/{args.aug_type}-{aug_soft}'
+    if args.beta > 0:
+        save_model_path += f'-beta{args.beta}'
+    if args.contrastive:
+        save_model_path += '-cont'
+    return save_model_path
     
 
 def format_reward(question):
@@ -96,24 +109,23 @@ def reward_func(completions, **kwargs):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--aug_type', type=str, default='joint', choices=['joint', 'text', 'table', 'hybrid'])  # hybrid: text-hard, table-soft
+    parser.add_argument('--aug_type', type=str, default='hybrid', choices=['joint', 'text', 'table', 'hybrid'])  # hybrid: text-hard, table-soft
     parser.add_argument('--soft', action='store_true')
     parser.add_argument('--beta', default=0, type=float)
     parser.add_argument('--contrastive', action='store_true')
+    parser.add_argument('--train_data_path', type=str, default='datasets/multihiertt/train_new.json')
+    parser.add_argument('--retriever_model_path', type=str, default='models/Qwen3-Embedding-0.6B')
+    parser.add_argument('--augment_model_path', type=str, default='models/Qwen3-1.7B')
     args = parser.parse_args()
 
     AUG_SOFT = 'soft' if args.soft else 'hard'
     CONTRASTIVE = args.contrastive
     AUG_TYPE = args.aug_type
 
-    train_data_path = 'datasets/multihiertt/train_new.json'
-    retriever_model_path = 'models/Qwen3-Embedding-0.6B'
-    augment_model_path = 'models/Qwen3-1.7B'
-    save_model_path = f'models/{args.aug_type}-{AUG_SOFT}'
-    if args.beta > 0:
-        save_model_path += f'-beta{args.beta}'
-    if CONTRASTIVE:
-        save_model_path += '-cont'
+    train_data_path = args.train_data_path
+    retriever_model_path = args.retriever_model_path
+    augment_model_path = args.augment_model_path
+    save_model_path = get_save_model_path(args)
 
     dataset = load_dataset('json', data_files=train_data_path)
 
@@ -136,7 +148,7 @@ if __name__ == "__main__":
     )
 
     model = AutoModelForCausalLM.from_pretrained(
-        "models/Qwen3-1.7B",
+        augment_model_path,
         torch_dtype=torch.bfloat16,
         # device_map="auto",
         trust_remote_code=True

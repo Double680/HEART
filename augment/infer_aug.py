@@ -11,6 +11,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dev', action='store_true')
 parser.add_argument('--name', type=str)
 parser.add_argument('--path', type=str, default='models/Qwen3-1.7B')
+parser.add_argument('--data_root', type=str, default='./datasets/multihiertt')
+parser.add_argument('--overwrite', action='store_true')
 args = parser.parse_args()
 
 model_path = args.path
@@ -19,7 +21,7 @@ if args.dev:
 else:
     dataset_type = "test"
     
-data_root = f"./datasets/multihiertt"
+data_root = args.data_root
 src_file = f"{data_root}/{dataset_type}.json"
 tgt_file = f"{data_root}/{dataset_type}_{args.name}.jsonl"
 
@@ -33,6 +35,9 @@ tokenizer = AutoTokenizer.from_pretrained(model_path)
 
 with open(src_file, "r") as file:
     dataset = json.loads(file.read())
+
+if args.overwrite:
+    open(tgt_file, "w").close()
 
 def make_conversation(example):
     with open("augment/aug_template.txt", "r") as file:

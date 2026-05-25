@@ -123,6 +123,7 @@ def recall_eval(pred, gth):
     total_cnt = 0
     for item in gth:
         tid, rid, cid = item.split('-')
+        tid = int(tid)
         rid = int(rid)
         cid = int(cid)
         if tid in pred:
@@ -242,7 +243,7 @@ def evaluate(args):
 
     else:
         results = []
-        for i in range(end-start):
+        for i in range(start, end):
             with open(os.path.join(save_root, f'{i}.json'), 'r') as file:
                 result = json.loads(file.read())
             results.append({

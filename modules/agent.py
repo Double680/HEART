@@ -1,9 +1,7 @@
-import sys
-
+import asyncio
 from openai import AsyncOpenAI
 from modules.api_query import *
 from copy import copy
-import time
 import json
 import os
 
@@ -74,7 +72,13 @@ class ThinkAgent:
         path = os.path.join(self.result_path, f'{id}.json')
 
         if os.path.exists(path):
-            return
+            try:
+                with open(path, 'r') as file:
+                    result = json.loads(file.read())
+                if result.get('response'):
+                    return
+            except Exception:
+                pass
 
         uid, prompt, text_inds, table_inds = self.preprocess(sample)        
         
@@ -101,7 +105,7 @@ class ThinkAgent:
                 if cnt >= 5:
                     break
                 print('API Calling failed, retry in 3 seconds...')
-                time.sleep(3)
+                await asyncio.sleep(3)
         
         save_prediction(uid, prompt, reasoning_content, response, path, text_inds, table_inds)
     
