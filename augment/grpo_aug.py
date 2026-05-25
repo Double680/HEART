@@ -8,6 +8,12 @@ from modules.process_tables import *
 from transformers import AutoModelForCausalLM
 import torch
 import argparse
+import re
+
+NO_THINK_SUFFIX = " /no_think"
+QUERY_PATTERN = re.compile(r"^\s*<query>(.*?)</query>\s*$", re.DOTALL)
+REWARD_CALLS = 0
+METRIC_LOG_STEPS = 10
 
 
 def make_conversation(example):
@@ -17,7 +23,7 @@ def make_conversation(example):
     prompt = {
         "prompt": [{
             "role": "user", 
-            "content": template.replace("<QUESTION>", example["qa"]["question"]) + '/no_think'
+            "content": template.replace("<QUESTION>", example["qa"]["question"]) + NO_THINK_SUFFIX
         }]
     }
     return prompt
@@ -40,13 +46,20 @@ def get_save_model_path(args):
     return save_model_path
     
 
-def format_reward(question):
-    reward = -2
-    if "<query>" in question and "</query>" in question:
-        reward += 1
-    if len(question.split("<query>")[-1].split("</query>")[0]) > 0:
-        reward += 1
-    return reward
+def extract_query(output):
+    match = QUERY_PATTERN.match(output)
+    if match:
+        return match.group(1).strip()
+    return output.split("<query>")[-1].split("</query>")[0].strip('\n').strip()
+
+
+def format_reward(output):
+    match = QUERY_PATTERN.match(output)
+    if match and match.group(1).strip():
+        return 0
+    if "<query>" in output and "</query>" in output:
+        return -1
+    return -2
 
 
 def process_text_scores(questions, **kwargs):
@@ -81,22 +94,78 @@ def process_table_scores(questions, **kwargs):
     return table_scores
 
 
+def mean(values):
+    return sum(values) / len(values) if values else 0.0
+
+
+def process_retrieval_metrics(questions, docs_list, evids_list, top_k=20):
+    precisions, recalls, ndcgs = [], [], []
+    for question, docs, evids in zip(questions, docs_list, evids_list):
+        if not docs:
+            precisions.append(1.0 if not evids else 0.0)
+            recalls.append(1.0 if not evids else 0.0)
+            ndcgs.append(1.0 if not evids else 0.0)
+            continue
+        precision, recall, ndcg = retriever.eval(
+            retriever.retrieve(question, docs, top_k=top_k),
+            evids
+        )
+        precisions.append(precision)
+        recalls.append(recall)
+        ndcgs.append(ndcg)
+    return {
+        "precision": mean(precisions),
+        "recall": mean(recalls),
+        "ndcg": mean(ndcgs),
+    }
+
+
+def log_retrieval_metrics(raw_outputs, queries, text_scores, table_scores, format_rewards, **kwargs):
+    text_docs = kwargs["paragraphs"]
+    text_evids = [kwargs["qa"][id]["text_evidence"] for id in range(len(kwargs["qa"]))]
+    table_docs = kwargs["table_description"]
+    table_evids = [kwargs["qa"][id]["table_evidence_id"] for id in range(len(kwargs["qa"]))]
+
+    text_metrics = process_retrieval_metrics(queries, text_docs, text_evids, top_k=20)
+    table_metrics = process_retrieval_metrics(queries, table_docs, table_evids, top_k=20)
+    valid_format = sum(1 for reward in format_rewards if reward == 0) / len(format_rewards) if format_rewards else 0.0
+
+    print(
+        "[GRPO retrieval] "
+        f"calls={REWARD_CALLS} "
+        f"text_p={text_metrics['precision']:.4f} "
+        f"text_r={text_metrics['recall']:.4f} "
+        f"text_ndcg={text_metrics['ndcg']:.4f} "
+        f"table_p={table_metrics['precision']:.4f} "
+        f"table_r={table_metrics['recall']:.4f} "
+        f"table_ndcg={table_metrics['ndcg']:.4f} "
+        f"text_reward={mean(text_scores):.4f} "
+        f"table_reward={mean(table_scores):.4f} "
+        f"format_valid={valid_format:.4f}",
+        flush=True
+    )
+
+
 def reward_func(completions, **kwargs):
-    questions = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
-    format_rewards = [format_reward(question) for question in questions]
-    questions = [
-        question.split("<query>")[-1].split("</query>")[0].strip('\n') for question in questions
-    ]
+    global REWARD_CALLS
+
+    raw_outputs = [completion[0]["content"].split('</think>')[-1].strip('\n') for completion in completions]
+    format_rewards = [format_reward(output) for output in raw_outputs]
+    queries = [extract_query(output) for output in raw_outputs]
 
     if AUG_TYPE == "text":
-        text_scores = process_text_scores(questions, **kwargs)
+        text_scores = process_text_scores(queries, **kwargs)
         table_scores = text_scores
     elif AUG_TYPE == "table":
-        table_scores = process_table_scores(questions, **kwargs)
+        table_scores = process_table_scores(queries, **kwargs)
         text_scores = table_scores
     else:
-        text_scores = process_text_scores(questions, **kwargs)
-        table_scores = process_table_scores(questions, **kwargs)
+        text_scores = process_text_scores(queries, **kwargs)
+        table_scores = process_table_scores(queries, **kwargs)
+
+    REWARD_CALLS += 1
+    if METRIC_LOG_STEPS > 0 and REWARD_CALLS % METRIC_LOG_STEPS == 0:
+        log_retrieval_metrics(raw_outputs, queries, text_scores, table_scores, format_rewards, **kwargs)
 
     retrieve_rewards = [
         reward_value(text_score) + reward_value(table_score)
@@ -116,11 +185,13 @@ if __name__ == "__main__":
     parser.add_argument('--train_data_path', type=str, default='datasets/multihiertt/train_new.json')
     parser.add_argument('--retriever_model_path', type=str, default='models/Qwen3-Embedding-0.6B')
     parser.add_argument('--augment_model_path', type=str, default='models/Qwen3-1.7B')
+    parser.add_argument('--metric_log_steps', type=int, default=10)
     args = parser.parse_args()
 
     AUG_SOFT = 'soft' if args.soft else 'hard'
     CONTRASTIVE = args.contrastive
     AUG_TYPE = args.aug_type
+    METRIC_LOG_STEPS = args.metric_log_steps
 
     train_data_path = args.train_data_path
     retriever_model_path = args.retriever_model_path

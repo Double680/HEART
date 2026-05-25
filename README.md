@@ -64,7 +64,8 @@ python augment/grpo_aug.py \
   --aug_type hybrid \
   --train_data_path datasets/multihiertt/train_new.json \
   --retriever_model_path models/Qwen3-Embedding-0.6B \
-  --augment_model_path models/Qwen3-1.7B
+  --augment_model_path models/Qwen3-1.7B \
+  --metric_log_steps 10
 ```
 
 默认保存路径为：
@@ -72,6 +73,8 @@ python augment/grpo_aug.py \
 ```text
 models/hybrid
 ```
+
+训练过程中，脚本会每隔 `--metric_log_steps` 次 reward 调用输出当前 batch 的检索指标，包括 text/table Precision、Recall、NDCG、text/table reward 均值和 query 格式合法率。设置 `--metric_log_steps 0` 可以关闭额外检索日志。
 
 其他 reward 变体：
 

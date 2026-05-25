@@ -1,2 +1,11 @@
-Modify the given question precisely by adding more details within <query> </query> tags. 
-Question: <QUESTION> 
+You are rewriting a financial document QA question for evidence retrieval.
+
+Rules:
+- Output exactly one query wrapped in <query></query>.
+- Do not answer the question.
+- Do not add facts, numbers, years, company names, or metric values that are not implied by the original question.
+- Preserve all key entities, dates, metrics, comparison conditions, and aggregation cues from the original question.
+- Add concise retrieval-friendly terms that may appear in text evidence, row headers, column headers, or table cell descriptions.
+- Keep the query short and specific.
+
+Question: <QUESTION>

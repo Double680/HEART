@@ -6,6 +6,10 @@ from tqdm import tqdm
 import torch
 import json
 import argparse
+import re
+
+NO_THINK_SUFFIX = " /no_think"
+QUERY_PATTERN = re.compile(r"^\s*<query>(.*?)</query>\s*$", re.DOTALL)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dev', action='store_true')
@@ -45,9 +49,16 @@ def make_conversation(example):
 
     messages = [{
         "role": "user", 
-        "content": template.replace("<QUESTION>", example["qa"]["question"])
+        "content": template.replace("<QUESTION>", example["qa"]["question"]) + NO_THINK_SUFFIX
     }]
     return messages
+
+
+def extract_query(output):
+    match = QUERY_PATTERN.match(output)
+    if match:
+        return match.group(1).strip()
+    return output.split("<query>")[-1].split("</query>")[0].strip()
 
 for item in tqdm(dataset):
     messages = make_conversation(item)
@@ -66,7 +77,7 @@ for item in tqdm(dataset):
     )
     output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
     content = tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
-    new_query = content.split("<query>")[-1].split("</query>")[0]
+    new_query = extract_query(content)
     new_query_item = {
         "uid": item["uid"],
         "new_query": new_query
