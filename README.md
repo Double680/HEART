@@ -68,6 +68,46 @@ python augment/grpo_aug.py \
   --metric_log_steps 10
 ```
 
+多卡训练使用 `accelerate launch` 启动。训练模型由 TRL/Accelerate 按 DDP 方式分发；reward 中的检索模型默认加载到当前进程对应的本地 GPU，避免每个进程都通过 `device_map=auto` 占用全部显卡。
+
+```bash
+accelerate launch --num_processes 4 augment/grpo_aug.py \
+  --aug_type hybrid \
+  --train_data_path datasets/multihiertt/train_new.json \
+  --retriever_model_path models/Qwen3-Embedding-0.6B \
+  --augment_model_path models/Qwen3-1.7B \
+  --per_device_train_batch_size 4 \
+  --gradient_accumulation_steps 4 \
+  --num_generations 8 \
+  --metric_log_steps 10
+```
+
+也可以使用 `torchrun`：
+
+```bash
+torchrun --nproc_per_node=4 augment/grpo_aug.py \
+  --aug_type hybrid \
+  --train_data_path datasets/multihiertt/train_new.json \
+  --retriever_model_path models/Qwen3-Embedding-0.6B \
+  --augment_model_path models/Qwen3-1.7B \
+  --per_device_train_batch_size 4 \
+  --gradient_accumulation_steps 4 \
+  --num_generations 8
+```
+
+如果显存紧张，可以把 reward 检索模型放到 CPU，但训练会变慢：
+
+```bash
+accelerate launch --num_processes 4 augment/grpo_aug.py \
+  --aug_type hybrid \
+  --retriever_device cpu \
+  --per_device_train_batch_size 4 \
+  --gradient_accumulation_steps 4 \
+  --num_generations 8
+```
+
+GRPO 通常要求全局 batch size 能被 `--num_generations` 整除。全局 batch size 等于 `per_device_train_batch_size * num_processes`；例如 4 卡、每卡 batch size 为 4 时，全局 batch size 为 16，可以被 `num_generations=8` 整除。
+
 默认保存路径为：
 
 ```text

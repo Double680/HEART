@@ -5,12 +5,27 @@ from sentence_transformers import SentenceTransformer
 
 
 class Retriever:
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, device: str = "cuda", torch_dtype: str = "auto"):
+        if device == "cuda" and not torch.cuda.is_available():
+            device = "cpu"
+        if device.startswith("cuda") and not torch.cuda.is_available():
+            device = "cpu"
+        if torch_dtype == "auto":
+            dtype = torch.bfloat16 if device.startswith("cuda") else torch.float32
+        else:
+            dtype = getattr(torch, torch_dtype)
+
+        model_kwargs = {"torch_dtype": dtype}
+        if device.startswith("cuda"):
+            model_kwargs["attn_implementation"] = "flash_attention_2"
+
         self.model = SentenceTransformer(
             model_name,
-            model_kwargs={"attn_implementation": "flash_attention_2", "device_map": "auto", "torch_dtype": "bfloat16"},
+            device=device,
+            model_kwargs=model_kwargs,
             tokenizer_kwargs={"padding_side": "left"}
         )
+        self.model.eval()
 
     def get_emb(self, input, query_type=False) -> torch.Tensor:
         if query_type:

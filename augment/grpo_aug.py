@@ -9,11 +9,36 @@ from transformers import AutoModelForCausalLM
 import torch
 import argparse
 import re
+import os
 
 NO_THINK_SUFFIX = " /no_think"
 QUERY_PATTERN = re.compile(r"^\s*<query>(.*?)</query>\s*$", re.DOTALL)
 REWARD_CALLS = 0
 METRIC_LOG_STEPS = 10
+
+
+def get_rank():
+    return int(os.environ.get("RANK", "0"))
+
+
+def is_main_process():
+    return get_rank() == 0
+
+
+def get_local_device():
+    local_rank = os.environ.get("LOCAL_RANK")
+    if torch.cuda.is_available():
+        if local_rank is not None:
+            torch.cuda.set_device(int(local_rank))
+            return f"cuda:{local_rank}"
+        return "cuda"
+    return "cpu"
+
+
+def resolve_retriever_device(device, local_device):
+    if device == "auto":
+        return local_device
+    return device
 
 
 def make_conversation(example):
@@ -121,6 +146,9 @@ def process_retrieval_metrics(questions, docs_list, evids_list, top_k=20):
 
 
 def log_retrieval_metrics(raw_outputs, queries, text_scores, table_scores, format_rewards, **kwargs):
+    if not is_main_process():
+        return
+
     text_docs = kwargs["paragraphs"]
     text_evids = [kwargs["qa"][id]["text_evidence"] for id in range(len(kwargs["qa"]))]
     table_docs = kwargs["table_description"]
@@ -185,9 +213,19 @@ if __name__ == "__main__":
     parser.add_argument('--train_data_path', type=str, default='datasets/multihiertt/train_new.json')
     parser.add_argument('--retriever_model_path', type=str, default='models/Qwen3-Embedding-0.6B')
     parser.add_argument('--augment_model_path', type=str, default='models/Qwen3-1.7B')
+    parser.add_argument('--retriever_device', type=str, default='auto')
     parser.add_argument('--metric_log_steps', type=int, default=10)
+    parser.add_argument('--learning_rate', type=float, default=5e-6)
+    parser.add_argument('--num_train_epochs', type=int, default=2)
+    parser.add_argument('--per_device_train_batch_size', type=int, default=32)
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=1)
+    parser.add_argument('--max_completion_length', type=int, default=256)
+    parser.add_argument('--num_generations', type=int, default=8)
+    parser.add_argument('--logging_steps', type=int, default=5)
+    parser.add_argument('--save_steps', type=int, default=2000)
     args = parser.parse_args()
 
+    local_device = get_local_device()
     AUG_SOFT = 'soft' if args.soft else 'hard'
     CONTRASTIVE = args.contrastive
     AUG_TYPE = args.aug_type
@@ -206,14 +244,14 @@ if __name__ == "__main__":
 
     training_args = GRPOConfig(
         output_dir=save_model_path,
-        learning_rate=5e-6,
-        num_train_epochs=2,
-        per_device_train_batch_size=32,
-        max_completion_length=256,
-        num_generations=8,
-        max_prompt_length=128,
-        logging_steps=5,
-        save_steps=2000,
+        learning_rate=args.learning_rate,
+        num_train_epochs=args.num_train_epochs,
+        per_device_train_batch_size=args.per_device_train_batch_size,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        max_completion_length=args.max_completion_length,
+        num_generations=args.num_generations,
+        logging_steps=args.logging_steps,
+        save_steps=args.save_steps,
         beta=args.beta,
         report_to=None
     )
@@ -225,7 +263,10 @@ if __name__ == "__main__":
         trust_remote_code=True
     )
 
-    retriever = Retriever(retriever_model_path)
+    retriever_device = resolve_retriever_device(args.retriever_device, local_device)
+    if is_main_process():
+        print(f"[GRPO train] local_device={local_device}, retriever_device={retriever_device}", flush=True)
+    retriever = Retriever(retriever_model_path, device=retriever_device)
 
     trainer = GRPOTrainer(
         model=model,
