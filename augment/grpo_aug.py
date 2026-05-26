@@ -89,19 +89,20 @@ class RetrievalReward:
         self.calls = {evidence_type: 0 for evidence_type in EVIDENCE_FIELDS}
 
     def reward_funcs(self):
-        return [
-            self._make_reward_func(evidence_type)
-            for evidence_type in enabled_evidence_types(self.config)
-        ]
+        reward_funcs = []
+        if self.config.text_reward != "none":
+            reward_funcs.append(self.text_retrieval_reward)
+        if self.config.table_reward != "none":
+            reward_funcs.append(self.table_retrieval_reward)
+        return reward_funcs
 
-    def _make_reward_func(self, evidence_type):
-        def reward_func(completions, **batch):
-            return self.retrieval_reward(completions, evidence_type, **batch)
+    def text_retrieval_reward(self, completions, **batch):
+        return self.retrieval_reward(completions, batch, "text")
 
-        reward_func.__name__ = f"{evidence_type}_retrieval_reward"
-        return reward_func
+    def table_retrieval_reward(self, completions, **batch):
+        return self.retrieval_reward(completions, batch, "table")
 
-    def retrieval_reward(self, completions, evidence_type, **batch):
+    def retrieval_reward(self, completions, batch, evidence_type):
         queries = [extract_query(self._content(completion)) for completion in completions]
         scores = self._score_evidence(queries, batch, evidence_type)
 
@@ -210,7 +211,7 @@ class RetrievalReward:
         )
 
 
-def build_parser():
+def parse_args():
     parser = argparse.ArgumentParser(description="Train the query augmentor with GRPO.")
 
     data_group = parser.add_argument_group("Data and model paths")
@@ -269,25 +270,51 @@ def build_parser():
     runtime_group.add_argument("--metric_log_steps", type=int, default=10)
     runtime_group.add_argument("--seed", type=int, default=42)
 
-    return parser
-
-
-def parse_args():
-    args = build_parser().parse_args()
+    args = parser.parse_args()
     if args.text_reward == "none" and args.table_reward == "none":
         raise ValueError("At least one of --text_reward or --table_reward must be hard or soft.")
     return args
 
 
-def build_reward_weights(args):
-    return [
-        getattr(args, f"{evidence_type}_weight")
-        for evidence_type in enabled_evidence_types(args)
-    ]
+def main():
+    args = parse_args()
+    local_device = get_local_device()
+    retriever_device = resolve_retriever_device(args.retriever_device, local_device)
 
+    if is_main_process():
+        print(
+            "[GRPO train] "
+            f"local_device={local_device}, "
+            f"reward_retrieve_type={args.reward_retrieve_type}, "
+            f"retriever_device={retriever_device}",
+            flush=True,
+        )
 
-def build_grpo_config(args):
-    config_kwargs = {
+    dataset = load_train_dataset(args.train_data_path, args.prompt_template_path, args.seed)
+    model = AutoModelForCausalLM.from_pretrained(
+        args.augment_model_path,
+        torch_dtype=torch.bfloat16,
+        trust_remote_code=True,
+    )
+    retriever = build_evidence_ranker(
+        args.reward_retrieve_type,
+        model_name=args.retriever_model_path,
+        device=retriever_device,
+        bm25_weight=args.reward_bm25_weight,
+    )
+    reward_evaluator = RetrievalReward(
+        retriever,
+        RewardConfig(
+            text_reward=args.text_reward,
+            table_reward=args.table_reward,
+            metric_log_steps=args.metric_log_steps,
+            reward_aggregation=args.reward_aggregation,
+            num_generations=args.num_generations,
+            retrieval_top_k=args.retrieval_top_k,
+        ),
+    )
+
+    training_config = {
         "output_dir": get_save_model_path(args),
         "learning_rate": args.learning_rate,
         "num_train_epochs": args.num_train_epochs,
@@ -298,58 +325,15 @@ def build_grpo_config(args):
         "logging_steps": args.logging_steps,
         "save_steps": args.save_steps,
         "beta": args.beta,
-        "reward_weights": build_reward_weights(args),
+        "reward_weights": [
+            getattr(args, f"{evidence_type}_weight")
+            for evidence_type in enabled_evidence_types(args)
+        ],
         "report_to": None,
     }
     if args.reward_aggregation == "advantage_then_sum":
-        config_kwargs["scale_rewards"] = False
-    return GRPOConfig(**config_kwargs)
-
-
-def build_augment_model(model_path):
-    return AutoModelForCausalLM.from_pretrained(
-        model_path,
-        torch_dtype=torch.bfloat16,
-        trust_remote_code=True,
-    )
-
-
-def build_reward_evaluator(args, local_device):
-    retriever_device = resolve_retriever_device(args.retriever_device, local_device)
-    if is_main_process():
-        print(
-            "[GRPO train] "
-            f"local_device={local_device}, "
-            f"reward_retrieve_type={args.reward_retrieve_type}, "
-            f"retriever_device={retriever_device}",
-            flush=True,
-        )
-
-    retriever = build_evidence_ranker(
-        args.reward_retrieve_type,
-        model_name=args.retriever_model_path,
-        device=retriever_device,
-        bm25_weight=args.reward_bm25_weight,
-    )
-    reward_config = RewardConfig(
-        text_reward=args.text_reward,
-        table_reward=args.table_reward,
-        metric_log_steps=args.metric_log_steps,
-        reward_aggregation=args.reward_aggregation,
-        num_generations=args.num_generations,
-        retrieval_top_k=args.retrieval_top_k,
-    )
-    return RetrievalReward(retriever, reward_config)
-
-
-def main():
-    args = parse_args()
-    local_device = get_local_device()
-
-    dataset = load_train_dataset(args.train_data_path, args.prompt_template_path, args.seed)
-    training_args = build_grpo_config(args)
-    model = build_augment_model(args.augment_model_path)
-    reward_evaluator = build_reward_evaluator(args, local_device)
+        training_config["scale_rewards"] = False
+    training_args = GRPOConfig(**training_config)
 
     trainer = GRPOTrainer(
         model=model,
