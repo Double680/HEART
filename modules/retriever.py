@@ -38,6 +38,12 @@ def threshold_or_top_k_indices(scores, top_k, top_p):
     return top_k_indices(scores, top_k)
 
 
+def tensor_to_scores(scores):
+    if isinstance(scores, torch.Tensor):
+        return scores.detach().float().cpu().reshape(-1).tolist()
+    return list(scores)
+
+
 class BM25Scorer:
     def __init__(self, documents, k1=1.5, b=0.75):
         self.documents = [tokenize(doc) for doc in documents]
@@ -68,6 +74,126 @@ class BM25Scorer:
                 score += idf * freq * (self.k1 + 1) / denom
             scores.append(score)
         return scores
+
+
+class EvidenceRanker:
+    def score_documents(self, query, documents):
+        raise NotImplementedError
+
+    def retrieve(self, query, documents, top_k=10):
+        return top_k_indices(self.score_documents(query, documents), top_k)
+
+    def soft_retrieve_eval(self, query, documents, gth):
+        scores = normalize_scores(self.score_documents(query, documents))
+        return self.score_relevance(scores, gth)
+
+    def score_relevance(self, scores, gth):
+        if not scores:
+            return 1.0 if not gth else 0.0
+
+        gth = set(gth)
+        positive_score = 1.0
+        for idx, score in enumerate(scores):
+            if idx in gth:
+                positive_score += score
+        positive_score /= len(gth) + 1
+        return positive_score
+
+    def eval(self, indices, gth):
+        if isinstance(indices, torch.Tensor):
+            indices = indices.detach().cpu().reshape(-1).tolist()
+        indices = list(dict.fromkeys(indices).keys())
+        gth = list(dict.fromkeys(gth).keys())
+        joint = set(indices).intersection(gth)
+        precision = len(joint) / len(indices) if indices else 0.0
+        recall = len(joint) / len(gth) if gth else 0.0
+        if len(gth) == 0:
+            ndcg = 1.0
+        else:
+            dcg, idcg = 0.0, 0.0
+            for i, idx in enumerate(indices):
+                if idx in gth:
+                    dcg += 1 / math.log2(i + 2)
+            for i in range(min(len(gth), len(indices))):
+                idcg += 1 / math.log2(i + 2)
+            ndcg = dcg / idcg if idcg > 0 else 0.0
+        return precision, recall, ndcg
+
+
+class DenseEvidenceRanker(EvidenceRanker):
+    def __init__(self, model_name, device="cuda", torch_dtype="auto"):
+        from sentence_transformers import SentenceTransformer
+
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        if device == "cuda" and not torch.cuda.is_available():
+            device = "cpu"
+        if device.startswith("cuda") and not torch.cuda.is_available():
+            device = "cpu"
+        if torch_dtype == "auto":
+            dtype = torch.bfloat16 if device.startswith("cuda") else torch.float32
+        else:
+            dtype = getattr(torch, torch_dtype)
+
+        model_kwargs = {"torch_dtype": dtype}
+        if device.startswith("cuda"):
+            model_kwargs["attn_implementation"] = "flash_attention_2"
+
+        self.model = SentenceTransformer(
+            model_name,
+            device=device,
+            model_kwargs=model_kwargs,
+            tokenizer_kwargs={"padding_side": "left"}
+        )
+        self.model.eval()
+
+    def get_emb(self, inputs, query_type=False):
+        if query_type:
+            return self.model.encode([inputs], prompt_name="query")
+        return self.model.encode(inputs)
+
+    def score_documents(self, query, documents):
+        if not documents:
+            return []
+        query_embedding = self.model.encode([query], prompt_name="query")
+        document_embeddings = self.model.encode(documents)
+        scores = self.model.similarity(query_embedding, document_embeddings).squeeze(0)
+        return tensor_to_scores(scores)
+
+    def soft_retrieve_eval(self, query, documents, gth):
+        return self.score_relevance(self.score_documents(query, documents), gth)
+
+
+class BM25EvidenceRanker(EvidenceRanker):
+    def score_documents(self, query, documents):
+        return BM25Scorer(documents).score(query)
+
+
+class HybridEvidenceRanker(EvidenceRanker):
+    def __init__(self, model_name, device="cuda", bm25_weight=0.5, torch_dtype="auto"):
+        self.dense_ranker = DenseEvidenceRanker(model_name, device=device, torch_dtype=torch_dtype)
+        self.bm25_weight = bm25_weight
+
+    def get_emb(self, inputs, query_type=False):
+        return self.dense_ranker.get_emb(inputs, query_type=query_type)
+
+    def score_documents(self, query, documents):
+        dense_scores = normalize_scores(self.dense_ranker.score_documents(query, documents))
+        bm25_scores = normalize_scores(BM25Scorer(documents).score(query))
+        return [
+            self.bm25_weight * bm25_score + (1 - self.bm25_weight) * dense_score
+            for dense_score, bm25_score in zip(dense_scores, bm25_scores)
+        ]
+
+
+def build_evidence_ranker(retrieve_type, model_name=None, device="cuda", bm25_weight=0.5):
+    if retrieve_type in ["dense", "dpr"]:
+        return DenseEvidenceRanker(model_name, device=device)
+    if retrieve_type == "bm25":
+        return BM25EvidenceRanker()
+    if retrieve_type == "hybrid":
+        return HybridEvidenceRanker(model_name, device=device, bm25_weight=bm25_weight)
+    raise ValueError(f"Unsupported evidence ranker type: {retrieve_type}")
 
 
 def table_description_items(sample):

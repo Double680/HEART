@@ -4,7 +4,7 @@ sys.path.append('./')
 import argparse
 import json
 import os
-from augment.retriever import Retriever
+from modules.retriever import DenseEvidenceRanker
 from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
@@ -18,7 +18,7 @@ parser.add_argument('--model_path', type=str, default='models/Qwen3-Embedding-0.
 args = parser.parse_args()
 
 dataset_type = "dev" if args.dev else "test"
-ret = Retriever(args.model_path)
+ret = DenseEvidenceRanker(args.model_path)
 
 with open(f"{args.data_root}/{dataset_type}.json", "r") as file:
     data = json.loads(file.read())

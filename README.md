@@ -62,6 +62,7 @@ datasets/multihiertt/train_new.json
 ```bash
 python augment/grpo_aug.py \
   --aug_type hybrid \
+  --reward_retrieve_type dense \
   --train_data_path datasets/multihiertt/train_new.json \
   --retriever_model_path models/Qwen3-Embedding-0.6B \
   --augment_model_path models/Qwen3-1.7B \
@@ -73,6 +74,7 @@ python augment/grpo_aug.py \
 ```bash
 accelerate launch --num_processes 4 augment/grpo_aug.py \
   --aug_type hybrid \
+  --reward_retrieve_type dense \
   --train_data_path datasets/multihiertt/train_new.json \
   --retriever_model_path models/Qwen3-Embedding-0.6B \
   --augment_model_path models/Qwen3-1.7B \
@@ -87,6 +89,7 @@ accelerate launch --num_processes 4 augment/grpo_aug.py \
 ```bash
 torchrun --nproc_per_node=4 augment/grpo_aug.py \
   --aug_type hybrid \
+  --reward_retrieve_type dense \
   --train_data_path datasets/multihiertt/train_new.json \
   --retriever_model_path models/Qwen3-Embedding-0.6B \
   --augment_model_path models/Qwen3-1.7B \
@@ -100,6 +103,7 @@ torchrun --nproc_per_node=4 augment/grpo_aug.py \
 ```bash
 accelerate launch --num_processes 4 augment/grpo_aug.py \
   --aug_type hybrid \
+  --reward_retrieve_type dense \
   --retriever_device cpu \
   --per_device_train_batch_size 4 \
   --gradient_accumulation_steps 4 \
@@ -107,6 +111,21 @@ accelerate launch --num_processes 4 augment/grpo_aug.py \
 ```
 
 GRPO 通常要求全局 batch size 能被 `--num_generations` 整除。全局 batch size 等于 `per_device_train_batch_size * num_processes`；例如 4 卡、每卡 batch size 为 4 时，全局 batch size 为 16，可以被 `num_generations=8` 整除。
+
+GRPO reward 默认使用 dense/DPR-style 检索。也可以改成 BM25 或 dense+BM25 混合检索，使训练目标和后续推理检索方式更一致：
+
+```bash
+# 使用 BM25 检索结果作为 GRPO reward。
+python augment/grpo_aug.py \
+  --aug_type hybrid \
+  --reward_retrieve_type bm25
+
+# 使用 dense 与 BM25 融合后的检索结果作为 GRPO reward。
+python augment/grpo_aug.py \
+  --aug_type hybrid \
+  --reward_retrieve_type hybrid \
+  --reward_bm25_weight 0.5
+```
 
 默认保存路径为：
 
