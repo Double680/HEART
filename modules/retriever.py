@@ -88,16 +88,11 @@ class EvidenceRanker:
         return self.score_relevance(scores, gth)
 
     def score_relevance(self, scores, gth):
-        if not scores:
-            return 1.0 if not gth else 0.0
+        if not scores or not gth:
+            return 0.0
 
         gth = set(gth)
-        positive_score = 1.0
-        for idx, score in enumerate(scores):
-            if idx in gth:
-                positive_score += score
-        positive_score /= len(gth) + 1
-        return positive_score
+        return sum(score for idx, score in enumerate(scores) if idx in gth) / len(gth)
 
     def eval(self, indices, gth):
         if isinstance(indices, torch.Tensor):
@@ -159,9 +154,6 @@ class DenseEvidenceRanker(EvidenceRanker):
         document_embeddings = self.model.encode(documents)
         scores = self.model.similarity(query_embedding, document_embeddings).squeeze(0)
         return tensor_to_scores(scores)
-
-    def soft_retrieve_eval(self, query, documents, gth):
-        return self.score_relevance(self.score_documents(query, documents), gth)
 
 
 class BM25EvidenceRanker(EvidenceRanker):
