@@ -18,6 +18,7 @@ NO_THINK_SUFFIX = " /no_think"
 QUERY_PATTERN = re.compile(r"^\s*<query>(.*?)</query>\s*$", re.DOTALL)
 RETRIEVAL_REWARD_SCALE = 4
 DEFAULT_RETRIEVAL_TOP_K = 20
+REWARD_TYPES = ["none", "hard", "soft"]
 EVIDENCE_FIELDS = {
     "text": ("paragraphs", "text_evidence"),
     "table": ("table_description", "table_evidence_id"),
@@ -26,8 +27,8 @@ EVIDENCE_FIELDS = {
 
 @dataclass
 class RewardConfig:
-    aug_type: str
-    use_soft_reward: bool
+    text_reward: str
+    table_reward: str
     metric_log_steps: int
     retrieval_top_k: int = DEFAULT_RETRIEVAL_TOP_K
 
@@ -86,11 +87,18 @@ def reward_value(value):
 
 
 def get_save_model_path(args):
-    if args.aug_type == "hybrid":
+    if args.text_reward == "hard" and args.table_reward == "soft":
         save_model_path = "models/hybrid"
     else:
-        aug_soft = "soft" if args.soft else "hard"
-        save_model_path = f"models/{args.aug_type}-{aug_soft}"
+        reward_parts = [
+            f"{evidence_type}-{reward_type}"
+            for evidence_type, reward_type in [
+                ("text", args.text_reward),
+                ("table", args.table_reward),
+            ]
+            if reward_type != "none"
+        ]
+        save_model_path = f"models/{'-'.join(reward_parts)}"
 
     if args.beta > 0:
         save_model_path += f"-beta{args.beta}"
@@ -131,34 +139,35 @@ class RetrievalReward:
         format_rewards = [format_reward(output) for output in raw_outputs]
         queries = [extract_query(output) for output in raw_outputs]
 
-        text_scores, table_scores = self._score_by_aug_type(queries, kwargs)
+        evidence_scores = self._score_selected_evidence(queries, kwargs)
 
         self.calls += 1
         if self.config.metric_log_steps > 0 and self.calls % self.config.metric_log_steps == 0:
-            self._log_metrics(queries, text_scores, table_scores, format_rewards, kwargs)
+            self._log_metrics(queries, evidence_scores, format_rewards, kwargs)
 
-        retrieve_rewards = [
-            reward_value(text_score) + reward_value(table_score)
-            for text_score, table_score in zip(text_scores, table_scores)
-        ]
+        retrieve_rewards = self._sum_retrieval_rewards(evidence_scores, len(format_rewards))
         return [fr + rr for fr, rr in zip(format_rewards, retrieve_rewards)]
 
-    def _score_by_aug_type(self, queries, batch):
-        if self.config.aug_type == "text":
-            scores = self._score_evidence(queries, batch, "text")
-            return scores, scores
-        if self.config.aug_type == "table":
-            scores = self._score_evidence(queries, batch, "table")
-            return scores, scores
-        return (
-            self._score_evidence(queries, batch, "text"),
-            self._score_evidence(queries, batch, "table"),
-        )
+    def _reward_type(self, evidence_type):
+        if evidence_type == "text":
+            return self.config.text_reward
+        return self.config.table_reward
 
-    def _use_soft_reward(self, evidence_type):
-        if self.config.aug_type == "hybrid":
-            return evidence_type == "table"
-        return self.config.use_soft_reward
+    def _score_selected_evidence(self, queries, batch):
+        return {
+            evidence_type: self._score_evidence(queries, batch, evidence_type)
+            for evidence_type in EVIDENCE_FIELDS
+            if self._reward_type(evidence_type) != "none"
+        }
+
+    def _sum_retrieval_rewards(self, evidence_scores, batch_size):
+        rewards = [0.0] * batch_size
+        for scores in evidence_scores.values():
+            rewards = [
+                reward + reward_value(score)
+                for reward, score in zip(rewards, scores)
+            ]
+        return rewards
 
     def _batch_evidence(self, batch, evidence_type):
         docs_key, evid_key = EVIDENCE_FIELDS[evidence_type]
@@ -166,7 +175,7 @@ class RetrievalReward:
 
     def _score_evidence(self, queries, batch, evidence_type):
         docs_list, evids_list = self._batch_evidence(batch, evidence_type)
-        if self._use_soft_reward(evidence_type):
+        if self._reward_type(evidence_type) == "soft":
             return [
                 self.retriever.soft_retrieve_eval(query, docs, evids)
                 for query, docs, evids in zip(queries, docs_list, evids_list)
@@ -202,7 +211,7 @@ class RetrievalReward:
             "ndcg": mean(ndcgs),
         }
 
-    def _log_metrics(self, queries, text_scores, table_scores, format_rewards, batch):
+    def _log_metrics(self, queries, evidence_scores, format_rewards, batch):
         if not is_main_process():
             return
 
@@ -229,8 +238,8 @@ class RetrievalReward:
             f"table_p={table_metrics['precision']:.4f} "
             f"table_r={table_metrics['recall']:.4f} "
             f"table_ndcg={table_metrics['ndcg']:.4f} "
-            f"text_reward={mean(text_scores):.4f} "
-            f"table_reward={mean(table_scores):.4f} "
+            f"text_reward={mean(evidence_scores.get('text', [])):.4f} "
+            f"table_reward={mean(evidence_scores.get('table', [])):.4f} "
             f"format_valid={valid_format:.4f}",
             flush=True,
         )
@@ -247,13 +256,19 @@ def build_parser():
 
     reward_group = parser.add_argument_group("Augmentation and reward")
     reward_group.add_argument(
-        "--aug_type",
+        "--text_reward",
         type=str,
-        default="hybrid",
-        choices=["joint", "text", "table", "hybrid"],
-        help="joint: text+table; hybrid: text hard reward + table soft reward.",
+        default="hard",
+        choices=REWARD_TYPES,
+        help="Reward type for text evidence.",
     )
-    reward_group.add_argument("--soft", action="store_true", help="Use soft retrieval reward for non-hybrid modes.")
+    reward_group.add_argument(
+        "--table_reward",
+        type=str,
+        default="soft",
+        choices=REWARD_TYPES,
+        help="Reward type for table evidence.",
+    )
     reward_group.add_argument("--retrieval_top_k", type=int, default=DEFAULT_RETRIEVAL_TOP_K)
     reward_group.add_argument(
         "--reward_retrieve_type",
@@ -281,6 +296,13 @@ def build_parser():
     runtime_group.add_argument("--seed", type=int, default=42)
 
     return parser
+
+
+def parse_args():
+    args = build_parser().parse_args()
+    if args.text_reward == "none" and args.table_reward == "none":
+        raise ValueError("At least one of --text_reward or --table_reward must be hard or soft.")
+    return args
 
 
 def build_grpo_config(args):
@@ -325,8 +347,8 @@ def build_reward_evaluator(args, local_device):
         bm25_weight=args.reward_bm25_weight,
     )
     reward_config = RewardConfig(
-        aug_type=args.aug_type,
-        use_soft_reward=args.soft,
+        text_reward=args.text_reward,
+        table_reward=args.table_reward,
         metric_log_steps=args.metric_log_steps,
         retrieval_top_k=args.retrieval_top_k,
     )
@@ -334,7 +356,7 @@ def build_reward_evaluator(args, local_device):
 
 
 def main():
-    args = build_parser().parse_args()
+    args = parse_args()
     local_device = get_local_device()
 
     dataset = load_train_dataset(args.train_data_path, args.prompt_template_path, args.seed)

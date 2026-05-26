@@ -61,7 +61,8 @@ datasets/multihiertt/train_new.json
 
 ```bash
 python augment/grpo_aug.py \
-  --aug_type hybrid \
+  --text_reward hard \
+  --table_reward soft \
   --reward_retrieve_type dense \
   --train_data_path datasets/multihiertt/train_new.json \
   --retriever_model_path models/Qwen3-Embedding-0.6B \
@@ -73,7 +74,8 @@ python augment/grpo_aug.py \
 
 ```bash
 accelerate launch --num_processes 4 augment/grpo_aug.py \
-  --aug_type hybrid \
+  --text_reward hard \
+  --table_reward soft \
   --reward_retrieve_type dense \
   --train_data_path datasets/multihiertt/train_new.json \
   --retriever_model_path models/Qwen3-Embedding-0.6B \
@@ -88,7 +90,8 @@ accelerate launch --num_processes 4 augment/grpo_aug.py \
 
 ```bash
 torchrun --nproc_per_node=4 augment/grpo_aug.py \
-  --aug_type hybrid \
+  --text_reward hard \
+  --table_reward soft \
   --reward_retrieve_type dense \
   --train_data_path datasets/multihiertt/train_new.json \
   --retriever_model_path models/Qwen3-Embedding-0.6B \
@@ -102,7 +105,8 @@ torchrun --nproc_per_node=4 augment/grpo_aug.py \
 
 ```bash
 accelerate launch --num_processes 4 augment/grpo_aug.py \
-  --aug_type hybrid \
+  --text_reward hard \
+  --table_reward soft \
   --reward_retrieve_type dense \
   --retriever_device cpu \
   --per_device_train_batch_size 4 \
@@ -117,12 +121,14 @@ GRPO reward 默认使用 dense/DPR-style 检索。也可以改成 BM25 或 dense
 ```bash
 # 使用 BM25 检索结果作为 GRPO reward。
 python augment/grpo_aug.py \
-  --aug_type hybrid \
+  --text_reward hard \
+  --table_reward soft \
   --reward_retrieve_type bm25
 
 # 使用 dense 与 BM25 融合后的检索结果作为 GRPO reward。
 python augment/grpo_aug.py \
-  --aug_type hybrid \
+  --text_reward hard \
+  --table_reward soft \
   --reward_retrieve_type hybrid \
   --reward_bm25_weight 0.5
 ```
@@ -138,15 +144,15 @@ models/hybrid
 其他 reward 变体：
 
 ```bash
-# 文本和表格都使用 hard reward 的 joint 训练。
-python augment/grpo_aug.py --aug_type joint
+# 文本和表格都使用 hard reward。
+python augment/grpo_aug.py --text_reward hard --table_reward hard
 
-# 文本和表格都使用 soft reward 的 joint 训练。
-python augment/grpo_aug.py --aug_type joint --soft
+# 文本和表格都使用 soft reward。
+python augment/grpo_aug.py --text_reward soft --table_reward soft
 
 # 单独训练 text-only 或 table-only augmentor。
-python augment/grpo_aug.py --aug_type text
-python augment/grpo_aug.py --aug_type table --soft
+python augment/grpo_aug.py --text_reward hard --table_reward none
+python augment/grpo_aug.py --text_reward none --table_reward soft
 ```
 
 ## 生成增强查询
