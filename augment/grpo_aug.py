@@ -1,6 +1,4 @@
 import argparse
-import os
-import re
 import sys
 from dataclasses import dataclass
 
@@ -11,18 +9,21 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM
 from trl import GRPOConfig, GRPOTrainer
 
+from augment.utils import (
+    DEFAULT_RETRIEVAL_TOP_K,
+    EVIDENCE_FIELDS,
+    NO_THINK_SUFFIX,
+    REWARD_AGGREGATIONS,
+    REWARD_TYPES,
+    enabled_evidence_types,
+    extract_query,
+    get_local_device,
+    is_main_process,
+    mean,
+    resolve_retriever_device,
+    std,
+)
 from modules.retriever import build_evidence_ranker
-
-
-NO_THINK_SUFFIX = " /no_think"
-QUERY_PATTERN = re.compile(r"^\s*<query>(.*?)</query>\s*$", re.DOTALL)
-RETRIEVAL_REWARD_SCALE = 4
-DEFAULT_RETRIEVAL_TOP_K = 20
-REWARD_TYPES = ["none", "hard", "soft"]
-EVIDENCE_FIELDS = {
-    "text": ("paragraphs", "text_evidence"),
-    "table": ("table_description", "table_evidence_id"),
-}
 
 
 @dataclass
@@ -30,35 +31,9 @@ class RewardConfig:
     text_reward: str
     table_reward: str
     metric_log_steps: int
+    reward_aggregation: str
+    num_generations: int
     retrieval_top_k: int = DEFAULT_RETRIEVAL_TOP_K
-
-
-def get_rank():
-    return int(os.environ.get("RANK", "0"))
-
-
-def is_main_process():
-    return get_rank() == 0
-
-
-def get_local_device():
-    local_rank = os.environ.get("LOCAL_RANK")
-    if torch.cuda.is_available():
-        if local_rank is not None:
-            torch.cuda.set_device(int(local_rank))
-            return f"cuda:{local_rank}"
-        return "cuda"
-    return "cpu"
-
-
-def resolve_retriever_device(device, local_device):
-    if device == "auto":
-        return local_device
-    return device
-
-
-def mean(values):
-    return sum(values) / len(values) if values else 0.0
 
 
 def load_prompt_template(template_path):
@@ -82,10 +57,6 @@ def load_train_dataset(train_data_path, prompt_template_path, seed):
     return dataset.shuffle(seed=seed)
 
 
-def reward_value(value):
-    return RETRIEVAL_REWARD_SCALE * value
-
-
 def get_save_model_path(args):
     if args.text_reward == "hard" and args.table_reward == "soft":
         save_model_path = "models/hybrid"
@@ -102,6 +73,8 @@ def get_save_model_path(args):
 
     if args.beta > 0:
         save_model_path += f"-beta{args.beta}"
+    if args.reward_aggregation == "advantage_then_sum":
+        save_model_path += "-advsum"
     if args.reward_retrieve_type not in ["dense", "dpr"]:
         save_model_path += f"-reward-{args.reward_retrieve_type}"
         if args.reward_retrieve_type == "hybrid":
@@ -109,65 +82,66 @@ def get_save_model_path(args):
     return save_model_path
 
 
-def extract_query(output):
-    match = QUERY_PATTERN.match(output)
-    if match:
-        return match.group(1).strip()
-    return output.split("<query>")[-1].split("</query>")[0].strip("\n").strip()
-
-
-def format_reward(output):
-    match = QUERY_PATTERN.match(output)
-    if match and match.group(1).strip():
-        return 0
-    if "<query>" in output and "</query>" in output:
-        return -1
-    return -2
-
-
 class RetrievalReward:
     def __init__(self, retriever, config):
         self.retriever = retriever
         self.config = config
-        self.calls = 0
+        self.calls = {evidence_type: 0 for evidence_type in EVIDENCE_FIELDS}
 
-    def compute(self, completions, **kwargs):
-        raw_outputs = [
-            completion[0]["content"].split("</think>")[-1].strip("\n")
-            for completion in completions
+    def reward_funcs(self):
+        return [
+            self._make_reward_func(evidence_type)
+            for evidence_type in enabled_evidence_types(self.config)
         ]
-        format_rewards = [format_reward(output) for output in raw_outputs]
-        queries = [extract_query(output) for output in raw_outputs]
 
-        evidence_scores = self._score_selected_evidence(queries, kwargs)
+    def _make_reward_func(self, evidence_type):
+        def reward_func(completions, **batch):
+            return self.retrieval_reward(completions, evidence_type, **batch)
 
-        self.calls += 1
-        if self.config.metric_log_steps > 0 and self.calls % self.config.metric_log_steps == 0:
-            self._log_metrics(queries, evidence_scores, format_rewards, kwargs)
+        reward_func.__name__ = f"{evidence_type}_retrieval_reward"
+        return reward_func
 
-        retrieve_rewards = self._sum_retrieval_rewards(evidence_scores, len(format_rewards))
-        return [fr + rr for fr, rr in zip(format_rewards, retrieve_rewards)]
+    def retrieval_reward(self, completions, evidence_type, **batch):
+        queries = [extract_query(self._content(completion)) for completion in completions]
+        scores = self._score_evidence(queries, batch, evidence_type)
+
+        self.calls[evidence_type] += 1
+        if (
+            self.config.metric_log_steps > 0
+            and self.calls[evidence_type] % self.config.metric_log_steps == 0
+        ):
+            self._log_metrics(queries, scores, batch, evidence_type)
+
+        return self._aggregate_reward_values(scores)
+
+    def _content(self, completion):
+        return completion[0]["content"].split("</think>")[-1].strip("\n")
+
+    def _aggregate_reward_values(self, rewards):
+        if self.config.reward_aggregation == "sum_then_advantage":
+            return rewards
+        return self._group_advantages(rewards)
+
+    def _group_advantages(self, rewards):
+        advantages = [None] * len(rewards)
+        group_size = self.config.num_generations
+
+        for start in range(0, len(rewards), group_size):
+            end = min(start + group_size, len(rewards))
+            valid_indices = [idx for idx in range(start, end) if rewards[idx] is not None]
+            if not valid_indices:
+                continue
+
+            valid_rewards = [rewards[idx] for idx in valid_indices]
+            group_mean = mean(valid_rewards)
+            group_std = std(valid_rewards)
+            for idx in valid_indices:
+                advantages[idx] = 0.0 if group_std == 0 else (rewards[idx] - group_mean) / group_std
+
+        return advantages
 
     def _reward_type(self, evidence_type):
-        if evidence_type == "text":
-            return self.config.text_reward
-        return self.config.table_reward
-
-    def _score_selected_evidence(self, queries, batch):
-        return {
-            evidence_type: self._score_evidence(queries, batch, evidence_type)
-            for evidence_type in EVIDENCE_FIELDS
-            if self._reward_type(evidence_type) != "none"
-        }
-
-    def _sum_retrieval_rewards(self, evidence_scores, batch_size):
-        rewards = [0.0] * batch_size
-        for scores in evidence_scores.values():
-            rewards = [
-                reward + reward_value(score)
-                for reward, score in zip(rewards, scores)
-            ]
-        return rewards
+        return getattr(self.config, f"{evidence_type}_reward")
 
     def _batch_evidence(self, batch, evidence_type):
         docs_key, evid_key = EVIDENCE_FIELDS[evidence_type]
@@ -175,26 +149,29 @@ class RetrievalReward:
 
     def _score_evidence(self, queries, batch, evidence_type):
         docs_list, evids_list = self._batch_evidence(batch, evidence_type)
-        if self._reward_type(evidence_type) == "soft":
-            return [
-                self.retriever.soft_retrieve_eval(query, docs, evids)
-                for query, docs, evids in zip(queries, docs_list, evids_list)
-            ]
 
-        return [
-            self.retriever.eval(self.retriever.retrieve(query, docs, top_k=self.config.retrieval_top_k), evids)[1]
-            for query, docs, evids in zip(queries, docs_list, evids_list)
-        ]
+        scores = []
+        for query, docs, evids in zip(queries, docs_list, evids_list):
+            if not evids:
+                scores.append(None)
+                continue
+
+            if self._reward_type(evidence_type) == "soft":
+                scores.append(self.retriever.soft_retrieve_eval(query, docs, evids))
+            else:
+                retrieved = self.retriever.retrieve(
+                    query,
+                    docs,
+                    top_k=self.config.retrieval_top_k,
+                )
+                scores.append(self.retriever.eval(retrieved, evids)[1])
+        return scores
 
     def _retrieval_metrics(self, queries, docs_list, evids_list):
         precisions, recalls, ndcgs = [], [], []
 
         for query, docs, evids in zip(queries, docs_list, evids_list):
-            if not docs:
-                empty_score = 1.0 if not evids else 0.0
-                precisions.append(empty_score)
-                recalls.append(empty_score)
-                ndcgs.append(empty_score)
+            if not evids:
                 continue
 
             precision, recall, ndcg = self.retriever.eval(
@@ -211,36 +188,24 @@ class RetrievalReward:
             "ndcg": mean(ndcgs),
         }
 
-    def _log_metrics(self, queries, evidence_scores, format_rewards, batch):
+    def _log_metrics(self, queries, evidence_scores, batch, evidence_type):
         if not is_main_process():
             return
 
-        text_docs, text_evids = self._batch_evidence(batch, "text")
-        table_docs, table_evids = self._batch_evidence(batch, "table")
-        text_metrics = self._retrieval_metrics(
-            queries,
-            text_docs,
-            text_evids,
-        )
-        table_metrics = self._retrieval_metrics(
-            queries,
-            table_docs,
-            table_evids,
-        )
-        valid_format = sum(1 for reward in format_rewards if reward == 0) / len(format_rewards)
+        docs, evids = self._batch_evidence(batch, evidence_type)
+        metrics = self._retrieval_metrics(queries, docs, evids)
+        valid_scores = [score for score in evidence_scores if score is not None]
+        labeled_ratio = len(valid_scores) / len(evidence_scores) if evidence_scores else 0.0
 
         print(
             "[GRPO retrieval] "
-            f"calls={self.calls} "
-            f"text_p={text_metrics['precision']:.4f} "
-            f"text_r={text_metrics['recall']:.4f} "
-            f"text_ndcg={text_metrics['ndcg']:.4f} "
-            f"table_p={table_metrics['precision']:.4f} "
-            f"table_r={table_metrics['recall']:.4f} "
-            f"table_ndcg={table_metrics['ndcg']:.4f} "
-            f"text_reward={mean(evidence_scores.get('text', [])):.4f} "
-            f"table_reward={mean(evidence_scores.get('table', [])):.4f} "
-            f"format_valid={valid_format:.4f}",
+            f"calls={self.calls[evidence_type]} "
+            f"type={evidence_type} "
+            f"p={metrics['precision']:.4f} "
+            f"r={metrics['recall']:.4f} "
+            f"ndcg={metrics['ndcg']:.4f} "
+            f"reward={mean(valid_scores):.4f} "
+            f"labeled_ratio={labeled_ratio:.4f}",
             flush=True,
         )
 
@@ -270,6 +235,15 @@ def build_parser():
         help="Reward type for table evidence.",
     )
     reward_group.add_argument("--retrieval_top_k", type=int, default=DEFAULT_RETRIEVAL_TOP_K)
+    reward_group.add_argument(
+        "--reward_aggregation",
+        type=str,
+        default="sum_then_advantage",
+        choices=REWARD_AGGREGATIONS,
+        help="sum_then_advantage keeps TRL's default behavior; advantage_then_sum normalizes each reward first.",
+    )
+    reward_group.add_argument("--text_weight", type=float, default=1.0)
+    reward_group.add_argument("--table_weight", type=float, default=1.0)
     reward_group.add_argument(
         "--reward_retrieve_type",
         type=str,
@@ -305,20 +279,31 @@ def parse_args():
     return args
 
 
+def build_reward_weights(args):
+    return [
+        getattr(args, f"{evidence_type}_weight")
+        for evidence_type in enabled_evidence_types(args)
+    ]
+
+
 def build_grpo_config(args):
-    return GRPOConfig(
-        output_dir=get_save_model_path(args),
-        learning_rate=args.learning_rate,
-        num_train_epochs=args.num_train_epochs,
-        per_device_train_batch_size=args.per_device_train_batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        max_completion_length=args.max_completion_length,
-        num_generations=args.num_generations,
-        logging_steps=args.logging_steps,
-        save_steps=args.save_steps,
-        beta=args.beta,
-        report_to=None,
-    )
+    config_kwargs = {
+        "output_dir": get_save_model_path(args),
+        "learning_rate": args.learning_rate,
+        "num_train_epochs": args.num_train_epochs,
+        "per_device_train_batch_size": args.per_device_train_batch_size,
+        "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "max_completion_length": args.max_completion_length,
+        "num_generations": args.num_generations,
+        "logging_steps": args.logging_steps,
+        "save_steps": args.save_steps,
+        "beta": args.beta,
+        "reward_weights": build_reward_weights(args),
+        "report_to": None,
+    }
+    if args.reward_aggregation == "advantage_then_sum":
+        config_kwargs["scale_rewards"] = False
+    return GRPOConfig(**config_kwargs)
 
 
 def build_augment_model(model_path):
@@ -350,6 +335,8 @@ def build_reward_evaluator(args, local_device):
         text_reward=args.text_reward,
         table_reward=args.table_reward,
         metric_log_steps=args.metric_log_steps,
+        reward_aggregation=args.reward_aggregation,
+        num_generations=args.num_generations,
         retrieval_top_k=args.retrieval_top_k,
     )
     return RetrievalReward(retriever, reward_config)
@@ -366,7 +353,7 @@ def main():
 
     trainer = GRPOTrainer(
         model=model,
-        reward_funcs=reward_evaluator.compute,
+        reward_funcs=reward_evaluator.reward_funcs(),
         args=training_args,
         train_dataset=dataset,
     )
