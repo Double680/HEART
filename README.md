@@ -53,6 +53,22 @@ datasets/multihiertt/train_new.json
 
 该文件除上述字段外，还应包含 `qa.table_evidence_id`。其中表格证据应表示为与 `table_description` 有序取值对齐的索引。
 
+如果只想在本地检查数据管线，不需要加载 Qwen3 模型或 GPU，可以运行：
+
+```bash
+python augment/check_multihiertt_data.py \
+  --data_path datasets/multihiertt/train_new.json \
+  --show 5
+```
+
+该脚本会检查 `qa.text_evidence` 是否能索引到 `paragraphs`，`qa.table_evidence_id` 是否能索引到 `table_description`，并打印若干样本的 evidence 对齐预览。也可以指定样本：
+
+```bash
+python augment/check_multihiertt_data.py \
+  --sample_index 0 \
+  --uid 17da9c24de4c4a43accd023a2c40b2c7
+```
+
 注意：当前代码直接在 `paragraphs` 已有单元上进行文本检索。如果要严格复现论文中的 sentence-chunk 设定，需要在生成 embedding 和运行检索前，先把 `paragraphs` 及对应 evidence id 预处理到句子级粒度。
 
 ## 训练 Query Augmentor
@@ -165,12 +181,31 @@ python augment/infer_aug.py \
   --dev \
   --name hybrid \
   --path models/hybrid \
+  --batch_size 8 \
   --overwrite
 
 # Test 集。
 python augment/infer_aug.py \
   --name hybrid \
   --path models/hybrid \
+  --batch_size 8 \
+  --overwrite
+```
+
+多卡并行推理可以使用 `accelerate launch`。脚本会按进程切分数据，每个进程绑定当前 `LOCAL_RANK` 对应的 GPU，最后自动合并为同一个 jsonl：
+
+```bash
+accelerate launch --num_processes 4 augment/infer_aug.py \
+  --dev \
+  --name hybrid \
+  --path models/hybrid \
+  --batch_size 8 \
+  --overwrite
+
+accelerate launch --num_processes 4 augment/infer_aug.py \
+  --name hybrid \
+  --path models/hybrid \
+  --batch_size 8 \
   --overwrite
 ```
 

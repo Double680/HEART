@@ -12,13 +12,14 @@ from trl import GRPOConfig, GRPOTrainer
 from augment.utils import (
     DEFAULT_RETRIEVAL_TOP_K,
     EVIDENCE_FIELDS,
-    NO_THINK_SUFFIX,
     REWARD_AGGREGATIONS,
     REWARD_TYPES,
     enabled_evidence_types,
     extract_query,
     get_local_device,
     is_main_process,
+    load_text,
+    make_prompt_example,
     mean,
     resolve_retriever_device,
     std,
@@ -36,24 +37,10 @@ class RewardConfig:
     retrieval_top_k: int = DEFAULT_RETRIEVAL_TOP_K
 
 
-def load_prompt_template(template_path):
-    with open(template_path, "r") as file:
-        return file.read()
-
-
-def make_conversation(example, template):
-    return {
-        "prompt": [{
-            "role": "user",
-            "content": template.replace("<QUESTION>", example["qa"]["question"]) + NO_THINK_SUFFIX,
-        }]
-    }
-
-
 def load_train_dataset(train_data_path, prompt_template_path, seed):
-    template = load_prompt_template(prompt_template_path)
+    template = load_text(prompt_template_path)
     dataset = load_dataset("json", data_files=train_data_path)["train"]
-    dataset = dataset.map(make_conversation, fn_kwargs={"template": template})
+    dataset = dataset.map(make_prompt_example, fn_kwargs={"template": template})
     return dataset.shuffle(seed=seed)
 
 
